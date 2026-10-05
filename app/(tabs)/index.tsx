@@ -1,98 +1,274 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Colors, Radius, Spacing } from '@/constants/theme';
+import { TEAM, TRAININGS, formatDateFr, MEMBERS } from '@/constants/data';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ProgressBar } from '@/components/volley/ProgressBar';
+import { PrimaryButton } from '@/components/volley/PrimaryButton';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function AccueilScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const today = TRAININGS[0];
+  const presentCount = today.presents;
+  const total = today.totalMembers;
+  const rate = Math.round((presentCount / total) * 100);
 
-export default function HomeScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerTop}>
+          <View style={styles.logoRow}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoEmoji}>🏐</Text>
+            </View>
+            <View>
+              <Text style={styles.greeting}>Bonjour Coach 👋</Text>
+              <Text style={styles.teamName}>Équipe {TEAM.category}</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications')}>
+            <IconSymbol name="bell.fill" size={22} color="#fff" />
+            <View style={styles.badge} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Prochain entraînement */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Prochain entraînement</Text>
+          <View style={styles.trainingRow}>
+            <View style={styles.dateBox}>
+              <IconSymbol name="calendar" size={18} color={Colors.light.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.trainingDate}>Aujourd'hui</Text>
+              <Text style={styles.trainingTime}>
+                {today.startTime} – {today.endTime}
+              </Text>
+              <View style={styles.locRow}>
+                <IconSymbol name="mappin" size={14} color={Colors.light.textSecondary} />
+                <Text style={styles.locText}>{today.location}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.presenceRow}>
+            <Text style={styles.presenceCount}>
+              {presentCount} présents / {total}
+            </Text>
+            <Text style={styles.presencePct}>{rate}%</Text>
+          </View>
+          <ProgressBar progress={rate} height={10} />
+
+          <PrimaryButton
+            title="Ouvrir le QR"
+            icon="qrcode"
+            onPress={() => router.push(`/qr-coach?id=${today.id}`)}
+            style={{ marginTop: 16 }}
+          />
+        </View>
+
+        {/* Présence aujourd'hui */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Présence aujourd'hui</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: Colors.light.success }]} />
+              <Text style={styles.statNum}>{today.presents}</Text>
+              <Text style={styles.statLabel}>Présents</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: Colors.light.warning }]} />
+              <Text style={styles.statNum}>{today.retards}</Text>
+              <Text style={styles.statLabel}>En retard</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: Colors.light.danger }]} />
+              <Text style={styles.statNum}>{today.absents}</Text>
+              <Text style={styles.statLabel}>Absents</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => router.push(`/presence-list?id=${today.id}`)}
+          >
+            <Text style={styles.linkText}>Voir la liste complète</Text>
+            <IconSymbol name="chevron.right" size={18} color={Colors.light.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick actions */}
+        <View style={styles.quickRow}>
+          <TouchableOpacity
+            style={styles.quickCard}
+            onPress={() => router.push('/(tabs)/equipe')}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: '#DBEAFE' }]}>
+              <IconSymbol name="person.2.fill" size={22} color={Colors.light.primary} />
+            </View>
+            <Text style={styles.quickLabel}>Équipe</Text>
+            <Text style={styles.quickSub}>{MEMBERS.length} membres</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.quickCard}
+            onPress={() => router.push('/(tabs)/presences')}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: '#DCFCE7' }]}>
+              <IconSymbol name="chart.bar.fill" size={22} color={Colors.light.success} />
+            </View>
+            <Text style={styles.quickLabel}>Stats</Text>
+            <Text style={styles.quickSub}>87% moyenne</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: { flex: 1, backgroundColor: Colors.light.background },
+  header: {
+    backgroundColor: Colors.light.header,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  stepContainer: {
-    gap: 8,
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logoCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoEmoji: { fontSize: 22 },
+  greeting: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  teamName: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  bellBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.light.danger,
+  },
+  scroll: { flex: 1, marginTop: -8 },
+  card: {
+    backgroundColor: Colors.light.card,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: Radius.lg,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  trainingRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  dateBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trainingDate: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
+  trainingTime: { fontSize: 14, color: Colors.light.textSecondary, marginTop: 2 },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  locText: { fontSize: 13, color: Colors.light.textSecondary },
+  presenceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  presenceCount: { fontSize: 14, fontWeight: '600', color: Colors.light.text },
+  presencePct: { fontSize: 14, fontWeight: '700', color: Colors.light.success },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
   },
+  statItem: { alignItems: 'center', gap: 4 },
+  statDot: { width: 10, height: 10, borderRadius: 5 },
+  statNum: { fontSize: 22, fontWeight: '700', color: Colors.light.text },
+  statLabel: { fontSize: 12, color: Colors.light.textSecondary },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  linkText: { fontSize: 14, fontWeight: '600', color: Colors.light.primary },
+  quickRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  quickCard: {
+    flex: 1,
+    backgroundColor: Colors.light.card,
+    borderRadius: Radius.lg,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  quickIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  quickLabel: { fontSize: 14, fontWeight: '600', color: Colors.light.text },
+  quickSub: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
 });
