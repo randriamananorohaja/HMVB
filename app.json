@@ -1,44 +1,46 @@
 {
   "expo": {
-    "name": "VolleyTeam",
-    "slug": "volleyteam",
+    "name": "HMVB",
+    "slug": "hmvb",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "volleyteam",
+    "icon": "./assets/images/logoHMVB.png",
+    "scheme": "hmvb",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "VolleyTeam a besoin de la cam\u00e9ra pour scanner les QR codes et prendre des photos d'avatar.",
-        "NSPhotoLibraryUsageDescription": "VolleyTeam a besoin d'acc\u00e9der \u00e0 vos photos pour l'avatar des joueurs."
+        "NSCameraUsageDescription": "HMVB a besoin de la caméra pour scanner les QR codes des joueurs et prendre des photos d'avatar.",
+        "NSPhotoLibraryUsageDescription": "HMVB a besoin d'accéder à vos photos pour l'avatar des joueurs."
       }
     },
     "android": {
+      "package": "com.hmvb.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/logoHMVB.png",
+        "backgroundColor": "#0A2540",
+        "backgroundImage": "./assets/images/logoHMVB.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/logoHMVB.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/logoHMVB.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -54,14 +56,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "VolleyTeam a besoin de la cam\u00e9ra pour scanner les QR codes de pr\u00e9sence."
+          "cameraPermission": "VolleyTeam a besoin de la caméra pour scanner les QR codes de présence."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "VolleyTeam a besoin d'acc\u00e9der \u00e0 vos photos pour l'avatar des joueurs.",
-          "cameraPermission": "VolleyTeam a besoin de la cam\u00e9ra pour prendre une photo d'avatar."
+          "photosPermission": "VolleyTeam a besoin d'accéder à vos photos pour l'avatar des joueurs.",
+          "cameraPermission": "VolleyTeam a besoin de la caméra pour prendre une photo d'avatar."
         }
       ],
       "expo-sqlite"
@@ -69,6 +71,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "aa11c744-328f-4177-a9fd-3d45ce865f01"
+      }
     }
   }
 }

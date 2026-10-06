@@ -9,11 +9,12 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { getMembers } from '@/lib/api';
+import { getMembers, deleteMember, updateMember } from '@/lib/api';
 import type { Member } from '@/lib/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Avatar } from '@/components/volley/Avatar';
@@ -52,6 +53,42 @@ export default function EquipeScreen() {
     <TouchableOpacity
       style={styles.memberRow}
       onPress={() => router.push(`/membre/${item.id}`)}
+      onLongPress={() => {
+        Alert.alert(
+          `${item.first_name} ${item.last_name}`,
+          'Choisir une action',
+          [
+            { text: 'Modifier', onPress: () => router.push(`/modifier-membre/${item.id}`) },
+            {
+              text: item.status === 'actif' ? 'Désactiver' : 'Réactiver',
+              onPress: async () => {
+                await updateMember(item.id, {
+                  status: item.status === 'actif' ? 'desactive' : 'actif',
+                });
+                loadMembers();
+              },
+            },
+            {
+              text: 'Supprimer',
+              style: 'destructive',
+              onPress: () => {
+                Alert.alert('Confirmer', 'Supprimer définitivement ce membre ?', [
+                  { text: 'Annuler', style: 'cancel' },
+                  {
+                    text: 'Supprimer',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await deleteMember(item.id);
+                      loadMembers();
+                    },
+                  },
+                ]);
+              },
+            },
+            { text: 'Annuler', style: 'cancel' },
+          ]
+        );
+      }}
       activeOpacity={0.7}
     >
       <Avatar

@@ -15,6 +15,7 @@ export default function ConfirmationPresenceScreen() {
     position?: string;
     time?: string;
     status?: string;
+    trainingId?: string;
   }>();
 
   const name = params.name || 'Joueur';
@@ -64,7 +65,7 @@ export default function ConfirmationPresenceScreen() {
         <PrimaryButton
           title="Retour au scanner"
           variant="outline"
-          onPress={() => router.replace('/scanner')}
+          onPress={() => { const tid = params.trainingId; router.replace(tid ? `/scanner?trainingId=${tid}` : '/scanner'); }}
           style={{ marginTop: 10, width: '100%' }}
         />
       </View>

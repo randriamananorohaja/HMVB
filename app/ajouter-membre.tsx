@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import { pickFromGallery, pickFromCamera } from '@/lib/imagePicker';
 import { Colors, Radius } from '@/constants/theme';
 import { POSITIONS } from '@/lib/types';
 import { createMember } from '@/lib/api';
@@ -35,39 +35,13 @@ export default function AjouterMembreScreen() {
   const [saving, setSaving] = useState(false);
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission requise',
-        "Autorisez l'accès à la galerie pour choisir une photo d'avatar."
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setAvatar(result.assets[0].uri);
-    }
+    const res = await pickFromGallery();
+    if (res) setAvatar(res.uri);
   };
 
   const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', "Autorisez l'accès à la caméra pour prendre une photo.");
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setAvatar(result.assets[0].uri);
-    }
+    const res = await pickFromCamera();
+    if (res) setAvatar(res.uri);
   };
 
   const chooseAvatar = () => {

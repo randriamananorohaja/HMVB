@@ -1,27 +1,26 @@
 # VolleyTeam
 
-Application mobile de gestion d'équipe de volleyball — **données réelles en SQLite local**.
+Application coach — gestion d'équipe volleyball.
+
+## Identifiants coach
+- **Numéro :** `0347180709`
+- **Mot de passe :** `Dera301`
 
 ## Fonctionnalités
-
-- Membres : ajout / modification / suppression, photo avatar (galerie ou caméra)
-- Champs joueur : nom, prénom, n°, position, téléphone, email, **date de naissance**, **lieu de naissance**, **adresse**
-- Entraînements : création, détail, suppression
-- Présences : scan QR (caméra), pointage manuel, stats
-- États vides : message **« Aucune donnée enregistrée »** quand les tables sont vides
-- Base SQLite locale (aucune donnée fictive)
+- Login coach unique
+- Membres (CRUD) + avatar + date/lieu naissance + adresse + **QR personnel**
+- Entraînements (CRUD) + date/heure pickers
+- **Pointage :** le coach scanne le QR de chaque joueur
+- Historique saison + **export Excel (CSV)**
+- Archivage auto des entraînements passés l'heure de fin
+- Base SQLite locale
 
 ## Installation
 
 ```bash
 npm install
+# ou pour aligner les versions Expo :
+npx expo install expo-sqlite expo-camera expo-image-picker @react-native-community/datetimepicker @react-native-async-storage/async-storage expo-file-system expo-sharing react-native-svg react-native-qrcode-svg
+
 npx expo start
 ```
-
-Permissions demandées : **caméra** (scan QR + photo avatar), **galerie** (avatar).
-
-## Structure données
-
-Tables SQLite : `teams`, `members`, `trainings`, `presences`, `notifications`.
-
-API : `lib/api.ts` · schéma : `lib/database.ts`

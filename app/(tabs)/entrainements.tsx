@@ -8,16 +8,19 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
 import {
-  getTrainingsWithStats,
+  getActiveTrainingsWithStats as getTrainingsWithStats,
+  deleteTraining,
   formatDateFr,
   isToday,
   type TrainingWithStats,
 } from '@/lib/api';
+// deleteTraining available from api
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ProgressBar } from '@/components/volley/ProgressBar';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
@@ -54,6 +57,40 @@ export default function EntrainementsScreen() {
       <TouchableOpacity
         style={[styles.card, today && styles.cardToday]}
         onPress={() => router.push(`/entrainement/${item.id}`)}
+        onLongPress={() => {
+          Alert.alert(
+            'Actions',
+            `${item.date} · ${item.start_time}`,
+            [
+              {
+                text: 'Modifier',
+                onPress: () => router.push(`/modifier-entrainement/${item.id}`),
+              },
+              {
+                text: 'Supprimer',
+                style: 'destructive',
+                onPress: () => {
+                  Alert.alert(
+                    'Confirmer',
+                    'Supprimer cet entraînement ?',
+                    [
+                      { text: 'Annuler', style: 'cancel' },
+                      {
+                        text: 'Supprimer',
+                        style: 'destructive',
+                        onPress: async () => {
+                          await deleteTraining(item.id);
+                          load();
+                        },
+                      },
+                    ]
+                  );
+                },
+              },
+              { text: 'Annuler', style: 'cancel' },
+            ]
+          );
+        }}
         activeOpacity={0.75}
       >
         <View style={styles.cardHeader}>

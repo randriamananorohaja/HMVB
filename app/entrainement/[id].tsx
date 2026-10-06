@@ -41,6 +41,29 @@ export default function EntrainementDetailScreen() {
     }, [id])
   );
 
+  const handleDelete = () => {
+    Alert.alert(
+      'Supprimer l\'entraînement',
+      'Cette action est définitive. Les présences liées seront aussi supprimées.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await deleteTraining(id);
+            if (ok) {
+              Alert.alert('Supprimé', 'L\'entraînement a été supprimé.');
+              router.replace('/(tabs)/entrainements');
+            } else {
+              Alert.alert('Erreur', 'Impossible de supprimer.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -65,22 +88,10 @@ export default function EntrainementDetailScreen() {
       <Header
         title="Détail de l'entraînement"
         showBack
-        rightIcon="trash"
-        onRightPress={() =>
-          Alert.alert('Supprimer', 'Supprimer cet entraînement ?', [
-            { text: 'Annuler', style: 'cancel' },
-            {
-              text: 'Supprimer',
-              style: 'destructive',
-              onPress: async () => {
-                await deleteTraining(id);
-                router.back();
-              },
-            },
-          ])
-        }
+        rightIcon="pencil"
+        onRightPress={() => router.push(`/modifier-entrainement/${id}`)}
       />
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View style={styles.card}>
           <View style={styles.row}>
             <IconSymbol name="calendar" size={18} color={Colors.light.primary} />
@@ -108,16 +119,16 @@ export default function EntrainementDetailScreen() {
           </View>
           <ProgressBar progress={stats.rate} height={10} />
           <PrimaryButton
-            title="QR Présence"
+            title="QR Présence / Scanner"
             icon="qrcode"
             onPress={() => router.push(`/qr-coach?id=${training.id}`)}
             style={{ marginTop: 16 }}
           />
           <PrimaryButton
-            title="Scanner"
-            icon="camera.fill"
+            title="Liste de présence"
+            icon="list.bullet"
             variant="outline"
-            onPress={() => router.push(`/scanner?trainingId=${training.id}`)}
+            onPress={() => router.push(`/presence-list?id=${training.id}`)}
             style={{ marginTop: 10 }}
           />
         </View>
@@ -128,6 +139,23 @@ export default function EntrainementDetailScreen() {
             <Text style={styles.notes}>{training.notes}</Text>
           </View>
         ) : null}
+
+        {/* Boutons UPDATE / DELETE bien visibles */}
+        <View style={styles.actionsCard}>
+          <Text style={styles.cardTitle}>Actions</Text>
+          <PrimaryButton
+            title="Modifier l'entraînement"
+            icon="pencil"
+            onPress={() => router.push(`/modifier-entrainement/${training.id}`)}
+          />
+          <PrimaryButton
+            title="Supprimer l'entraînement"
+            icon="trash"
+            variant="danger"
+            onPress={handleDelete}
+            style={{ marginTop: 12 }}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -140,6 +168,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: 16,
     marginBottom: 14,
+  },
+  actionsCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: Radius.lg,
+    padding: 16,
+    marginBottom: 14,
+    marginTop: 4,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   date: { fontSize: 16, fontWeight: '700', color: Colors.light.text },

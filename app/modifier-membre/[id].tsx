@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import { pickFromGallery, pickFromCamera } from '@/lib/imagePicker';
 import { Colors, Radius } from '@/constants/theme';
 import { getMember, updateMember } from '@/lib/api';
 import { POSITIONS } from '@/lib/types';
@@ -63,34 +63,15 @@ export default function ModifierMembreScreen() {
       {
         text: 'Galerie',
         onPress: async () => {
-          const { status: s } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (s !== 'granted') {
-            Alert.alert('Permission requise', "Autorisez l'accès à la galerie.");
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
-          });
-          if (!result.canceled && result.assets[0]) setAvatar(result.assets[0].uri);
+          const res = await pickFromGallery();
+          if (res) setAvatar(res.uri);
         },
       },
       {
         text: 'Appareil photo',
         onPress: async () => {
-          const { status: s } = await ImagePicker.requestCameraPermissionsAsync();
-          if (s !== 'granted') {
-            Alert.alert('Permission requise', "Autorisez l'accès à la caméra.");
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
-          });
-          if (!result.canceled && result.assets[0]) setAvatar(result.assets[0].uri);
+          const res = await pickFromCamera();
+          if (res) setAvatar(res.uri);
         },
       },
       { text: 'Annuler', style: 'cancel' },

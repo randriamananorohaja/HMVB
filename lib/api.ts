@@ -346,3 +346,125 @@ export function formatDateFr(dateStr: string): string {
 export function isToday(dateStr: string): boolean {
   return dateStr === new Date().toISOString().slice(0, 10);
 }
+
+// ─── Historique saison & nettoyage auto ──────────────────
+
+export type HistoryRow = {
+  training_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  number: number;
+  position: string;
+  status: string;
+  time: string | null;
+};
+
+export async function getSeasonHistory(): Promise<HistoryRow[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<HistoryRow>(`
+    SELECT
+      t.id as training_id,
+      t.date,
+      t.start_time,
+      t.end_time,
+      t.location,
+      m.id as member_id,
+      m.first_name,
+      m.last_name,
+      m.number,
+      m.position,
+      COALESCE(p.status, 'absent') as status,
+      p.time
+    FROM trainings t
+    CROSS JOIN members m
+    LEFT JOIN presences p ON p.training_id = t.id AND p.member_id = m.id
+    WHERE m.status = 'actif'
+    ORDER BY t.date DESC, t.start_time DESC, m.number ASC
+  `);
+  return rows ?? [];
+}
+
+/** Génère un CSV compatible Excel (séparateur ;) */
+export function historyToCsv(rows: HistoryRow[]): string {
+  const header = 'Date;Heure début;Heure fin;Lieu;N°;Nom;Prénom;Position;Statut;Heure pointage';
+  const lines = rows.map((r) => {
+    const status =
+      r.status === 'present' ? 'Présent' : r.status === 'retard' ? 'En retard' : 'Absent';
+    return [
+      r.date,
+      r.start_time,
+      r.end_time,
+      `"${(r.location || '').replace(/"/g, '""')}"`,
+      r.number,
+      `"${r.last_name.replace(/"/g, '""')}"`,
+      `"${r.first_name.replace(/"/g, '""')}"`,
+      `"${(r.position || '').replace(/"/g, '""')}"`,
+      status,
+      r.time || '',
+    ].join(';');
+  });
+  // BOM UTF-8 for Excel
+  return '\uFEFF' + [header, ...lines].join('\n');
+}
+
+/**
+ * Supprime les entraînements dont l'heure de fin est dépassée.
+ * Conserves les présences liées? Non — on archive en gardant historique via soft? User asked delete.
+ * On supprime l'entraînement ET ses présences (CASCADE déjà en schema).
+ * ATTENTION: cela efface l'historique. Better: only delete if user wants auto-clean of past sessions
+ * from the list but keep data... User said "supprimer automatiquement l'entrainement une fois heure de fin atteint"
+ * So delete from trainings table. History export should run before or we keep presences?
+ * Schema has ON DELETE CASCADE on presences. For history we need to either soft-delete or keep.
+ * I'll soft-delete: add archived flag, or move to history.
+ * Simpler approach without migration issues: mark as ended by filtering them out of active list
+ * but user said "supprimer". I'll delete trainings past end time from active views by deleting them
+ * BUT first ensure history is stored... Actually the history query joins trainings - if deleted, history gone.
+ *
+ * Solution: add column `ended` INTEGER DEFAULT 0, set to 1 when past end, hide from list.
+ * Or keep trainings and just not show as "upcoming". User said delete auto though.
+ *
+ * I'll implement cleanup that soft-archives via status column on trainings.
+ */
+export async function cleanupExpiredTrainings(): Promise<number> {
+  const db = await getDb();
+  // Ensure column exists
+  try {
+    await db.execAsync(`ALTER TABLE trainings ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // column may already exist
+  }
+
+  const all = await db.getAllAsync<{ id: string; date: string; end_time: string; archived: number }>(
+    'SELECT id, date, end_time, COALESCE(archived, 0) as archived FROM trainings WHERE COALESCE(archived, 0) = 0'
+  );
+  const now = new Date();
+  let count = 0;
+  for (const t of all ?? []) {
+    const end = new Date(`${t.date}T${t.end_time}:00`);
+    if (!isNaN(end.getTime()) && end.getTime() <= now.getTime()) {
+      await db.runAsync('UPDATE trainings SET archived = 1, updated_at = ? WHERE id = ?', [
+        nowIso(),
+        t.id,
+      ]);
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Liste des entraînements actifs (non archivés) */
+export async function getActiveTrainingsWithStats() {
+  await cleanupExpiredTrainings();
+  const all = await getTrainingsWithStats();
+  const db = await getDb();
+  const archived = await db.getAllAsync<{ id: string }>(
+    'SELECT id FROM trainings WHERE COALESCE(archived, 0) = 1'
+  );
+  const archSet = new Set((archived ?? []).map((a) => a.id));
+  return all.filter((t) => !archSet.has(t.id));
+}

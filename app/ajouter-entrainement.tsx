@@ -5,17 +5,7 @@ import { Colors, Radius } from '@/constants/theme';
 import { createTraining, addNotification } from '@/lib/api';
 import { Header } from '@/components/volley/Header';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
-
-function toIsoDate(input: string): string | null {
-  // Accept YYYY-MM-DD or DD/MM/YYYY
-  const s = input.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) {
-    return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  }
-  return null;
-}
+import { DateField, TimeField } from '@/components/volley/DateTimeFields';
 
 export default function AjouterEntrainementScreen() {
   const router = useRouter();
@@ -28,21 +18,16 @@ export default function AjouterEntrainementScreen() {
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    const iso = toIsoDate(date);
-    if (!iso) {
-      Alert.alert('Erreur', 'Date invalide (utilisez AAAA-MM-JJ ou JJ/MM/AAAA)');
-      return;
-    }
-    if (!start || !end) {
-      Alert.alert('Erreur', 'Heures de début et fin obligatoires');
+    if (!date || !start || !end) {
+      Alert.alert('Erreur', 'Date et heures obligatoires');
       return;
     }
     setSaving(true);
     try {
       const created = await createTraining({
-        date: iso,
-        start_time: start.trim(),
-        end_time: end.trim(),
+        date,
+        start_time: start,
+        end_time: end,
         location: location.trim(),
         notes: notes.trim() || null,
       });
@@ -52,13 +37,11 @@ export default function AjouterEntrainementScreen() {
       }
       await addNotification(
         'Nouvel entraînement',
-        `${iso} · ${start} – ${end}${location ? ' · ' + location : ''}`,
+        `${date} · ${start} – ${end}${location ? ' · ' + location : ''}`,
         'calendar',
         Colors.light.primary
       );
-      Alert.alert('Succès', 'Entraînement créé', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      Alert.alert('Succès', 'Entraînement créé', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e) {
       Alert.alert('Erreur', String(e));
     } finally {
@@ -70,10 +53,19 @@ export default function AjouterEntrainementScreen() {
     <View style={styles.container}>
       <Header title="Ajouter un entraînement" showBack />
       <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-        <Field label="Date *" value={date} onChange={setDate} placeholder="AAAA-MM-JJ" />
-        <Field label="Heure de début *" value={start} onChange={setStart} placeholder="18:00" />
-        <Field label="Heure de fin *" value={end} onChange={setEnd} placeholder="20:00" />
-        <Field label="Lieu *" value={location} onChange={setLocation} placeholder="Gymnase..." />
+        <DateField label="Date *" value={date} onChange={setDate} />
+        <TimeField label="Heure de début *" value={start} onChange={setStart} />
+        <TimeField label="Heure de fin *" value={end} onChange={setEnd} />
+        <View style={{ marginBottom: 16 }}>
+          <Text style={styles.label}>Lieu *</Text>
+          <TextInput
+            style={styles.input}
+            value={location}
+            onChangeText={setLocation}
+            placeholder="Gymnase..."
+            placeholderTextColor={Colors.light.textMuted}
+          />
+        </View>
         <View style={{ marginBottom: 16 }}>
           <Text style={styles.label}>Notes (optionnel)</Text>
           <TextInput
@@ -89,35 +81,9 @@ export default function AjouterEntrainementScreen() {
           title={saving ? 'Création…' : "Créer l'entraînement"}
           onPress={handleSave}
           disabled={saving}
-          style={{ marginTop: 8 }}
         />
         {saving && <ActivityIndicator style={{ marginTop: 12 }} color={Colors.light.primary} />}
       </ScrollView>
-    </View>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.light.textMuted}
-      />
     </View>
   );
 }

@@ -15,7 +15,7 @@ import { Colors, Radius } from '@/constants/theme';
 import {
   getTeam,
   getMembers,
-  getTrainingsWithStats,
+  getActiveTrainingsWithStats,
   getGlobalStats,
   type TrainingWithStats,
 } from '@/lib/api';
@@ -39,7 +39,7 @@ export default function AccueilScreen() {
     const [t, members, trainings, g] = await Promise.all([
       getTeam(),
       getMembers(),
-      getTrainingsWithStats(),
+      getActiveTrainingsWithStats(),
       getGlobalStats(),
     ]);
     setTeam(t);

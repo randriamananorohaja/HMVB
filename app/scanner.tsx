@@ -2,16 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import { Colors, Radius } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 import { getMembers, getTraining, setPresence, addNotification } from '@/lib/api';
 import { Header } from '@/components/volley/Header';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
 
 /**
- * Format QR attendu :
- * - member:<memberId>
- * - training:<trainingId>
- * - ou JSON { type: 'member'|'training', id: '...' }
+ * Le COACH scanne le QR personnel de chaque JOUEUR.
+ * Format QR joueur : member:<memberId>
  */
 export default function ScannerScreen() {
   const router = useRouter();
@@ -32,38 +30,34 @@ export default function ScannerScreen() {
     setProcessing(true);
 
     try {
-      const raw = result.data?.trim() || '';
+      const raw = (result.data || '').trim();
       let memberId: string | null = null;
-      let tid = trainingId || null;
 
       if (raw.startsWith('member:')) {
-        memberId = raw.slice(7);
-      } else if (raw.startsWith('training:')) {
-        tid = raw.slice(9);
+        memberId = raw.slice(7).trim();
       } else {
         try {
           const json = JSON.parse(raw);
-          if (json.type === 'member') memberId = json.id;
-          if (json.type === 'training') tid = json.id;
-          if (json.memberId) memberId = json.memberId;
-          if (json.trainingId) tid = json.trainingId;
+          if (json.type === 'member' || json.memberId) {
+            memberId = json.id || json.memberId;
+          }
         } catch {
-          // treat as member id
-          memberId = raw;
+          // UUID-like payload
+          if (/^[0-9a-f-]{8,}$/i.test(raw)) memberId = raw;
         }
       }
 
-      if (!tid) {
+      if (!trainingId) {
         Alert.alert(
           'Entraînement requis',
-          "Ouvrez le scanner depuis un entraînement, ou scannez un QR d'entraînement.",
+          "Ouvrez le scanner depuis un entraînement pour pointer les présences.",
           [{ text: 'OK', onPress: () => setScanned(false) }]
         );
         setProcessing(false);
         return;
       }
 
-      const training = await getTraining(tid);
+      const training = await getTraining(trainingId);
       if (!training) {
         Alert.alert('Erreur', 'Entraînement introuvable', [
           { text: 'OK', onPress: () => setScanned(false) },
@@ -73,15 +67,19 @@ export default function ScannerScreen() {
       }
 
       if (!memberId) {
-        // QR training only — navigate to coach QR or list
-        router.replace(`/qr-coach?id=${tid}`);
+        Alert.alert(
+          'QR invalide',
+          "Ce QR n'est pas une carte membre. Demandez au joueur d'afficher son QR personnel.",
+          [{ text: 'OK', onPress: () => setScanned(false) }]
+        );
+        setProcessing(false);
         return;
       }
 
       const members = await getMembers();
       const member = members.find((m) => m.id === memberId);
       if (!member) {
-        Alert.alert('Erreur', 'Membre introuvable dans la base', [
+        Alert.alert('Erreur', 'Joueur introuvable dans la base', [
           { text: 'OK', onPress: () => setScanned(false) },
         ]);
         setProcessing(false);
@@ -90,13 +88,12 @@ export default function ScannerScreen() {
 
       const now = new Date();
       const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      // Simple late logic: after start_time + 10 min
       const [sh, sm] = training.start_time.split(':').map(Number);
-      const startMins = sh * 60 + sm;
+      const startMins = sh * 60 + (sm || 0);
       const nowMins = now.getHours() * 60 + now.getMinutes();
       const status = nowMins > startMins + 10 ? 'retard' : 'present';
 
-      await setPresence(tid, member.id, status as any, time);
+      await setPresence(trainingId, member.id, status as any, time);
       await addNotification(
         'Présence enregistrée',
         `${member.first_name} ${member.last_name} · ${status === 'present' ? 'Présent' : 'En retard'} à ${time}`,
@@ -110,9 +107,10 @@ export default function ScannerScreen() {
           memberId: member.id,
           name: `${member.first_name} ${member.last_name}`,
           number: String(member.number),
-          position: member.position,
+          position: String(member.position),
           time,
           status,
+          trainingId,
         },
       });
     } catch (e) {
@@ -133,10 +131,10 @@ export default function ScannerScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Header title="Scanner" showBack />
+        <Header title="Scanner les joueurs" showBack />
         <View style={[styles.content, styles.center]}>
           <Text style={styles.hint}>
-            L'autorisation caméra est nécessaire pour scanner les QR codes de présence.
+            Autorisez la caméra pour scanner le QR personnel de chaque joueur.
           </Text>
           <PrimaryButton title="Autoriser la caméra" onPress={requestPermission} />
         </View>
@@ -146,9 +144,11 @@ export default function ScannerScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Scanner" showBack />
+      <Header title="Scanner les joueurs" showBack />
       <View style={styles.content}>
-        <Text style={styles.hint}>Scannez le QR du joueur ou de l'entraînement</Text>
+        <Text style={styles.hint}>
+          Scannez le QR personnel affiché sur la carte de chaque joueur
+        </Text>
         <View style={styles.cameraWrap}>
           <CameraView
             style={styles.camera}
@@ -166,7 +166,7 @@ export default function ScannerScreen() {
         {processing && <ActivityIndicator color={Colors.light.primary} style={{ marginTop: 16 }} />}
         {scanned && !processing && (
           <PrimaryButton
-            title="Scanner à nouveau"
+            title="Scanner le joueur suivant"
             onPress={() => setScanned(false)}
             style={{ marginTop: 16, width: '100%' }}
           />
@@ -196,12 +196,7 @@ const styles = StyleSheet.create({
   },
   camera: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  corner: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderColor: Colors.light.primary,
-  },
+  corner: { position: 'absolute', width: 36, height: 36, borderColor: Colors.light.primary },
   tl: { top: 24, left: 24, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 8 },
   tr: { top: 24, right: 24, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 8 },
   bl: { bottom: 24, left: 24, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 8 },

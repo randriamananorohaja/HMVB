@@ -55,6 +55,7 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
       end_time TEXT NOT NULL,
       location TEXT NOT NULL DEFAULT '',
       notes TEXT,
+      archived INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE

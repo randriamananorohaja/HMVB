@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
 import { getTraining, getTrainingsWithStats, formatDateFr } from '@/lib/api';
@@ -8,6 +8,9 @@ import { Header } from '@/components/volley/Header';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
 
+/**
+ * Session de pointage : le coach scanne les QR des joueurs (pas un QR collectif).
+ */
 export default function QrCoachScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
@@ -33,15 +36,6 @@ export default function QrCoachScreen() {
     }, [id])
   );
 
-  const qrPayload = training ? `training:${training.id}` : '';
-
-  const shareQr = async () => {
-    if (!qrPayload) return;
-    await Share.share({
-      message: `QR VolleyTeam — scannnez pour l'entraînement\n${qrPayload}`,
-    });
-  };
-
   if (loading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -53,7 +47,7 @@ export default function QrCoachScreen() {
   if (!training) {
     return (
       <View style={styles.container}>
-        <Header title="QR de l'entraînement" showBack />
+        <Header title="Pointage" showBack />
         <Text style={{ padding: 20, color: Colors.light.textSecondary }}>
           Aucune donnée enregistrée
         </Text>
@@ -63,7 +57,7 @@ export default function QrCoachScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="QR de l'entraînement" showBack />
+      <Header title="Pointage présence" showBack />
 
       <View style={styles.content}>
         <View style={styles.infoCard}>
@@ -77,47 +71,26 @@ export default function QrCoachScreen() {
           </View>
         </View>
 
-        <View style={styles.qrCard}>
-          <View style={styles.qrBox}>
-            {/* Pattern visual representing QR — payload is training:id */}
-            <View style={styles.qrInner}>
-              {Array.from({ length: 11 }).map((_, row) => (
-                <View key={row} style={styles.qrRow}>
-                  {Array.from({ length: 11 }).map((_, col) => {
-                    const seed = (training.id.charCodeAt(row % training.id.length) + col * 3 + row) % 5;
-                    const filled =
-                      (row < 3 && col < 3) ||
-                      (row < 3 && col > 7) ||
-                      (row > 7 && col < 3) ||
-                      seed === 0;
-                    return (
-                      <View
-                        key={col}
-                        style={[styles.qrCell, filled && styles.qrCellFilled]}
-                      />
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-          </View>
-          <Text style={styles.scanHint}>Scannez ce QR pour enregistrer votre présence</Text>
-          <Text style={styles.payload} numberOfLines={1}>
-            {qrPayload}
+        <View style={styles.helpCard}>
+          <IconSymbol name="qrcode" size={40} color={Colors.light.primary} />
+          <Text style={styles.helpTitle}>Comment pointer ?</Text>
+          <Text style={styles.helpText}>
+            Chaque joueur affiche le QR de sa fiche membre. Vous scannez ce QR avec la caméra pour
+            enregistrer sa présence.
           </Text>
         </View>
 
         <PrimaryButton
-          title="Partager / Afficher"
-          icon="share"
-          onPress={shareQr}
+          title="Scanner les QR des joueurs"
+          icon="camera.fill"
+          onPress={() => router.push(`/scanner?trainingId=${training.id}`)}
           style={{ marginBottom: 12 }}
         />
         <PrimaryButton
-          title="Ouvrir le scanner"
-          icon="camera.fill"
+          title="Liste de présence (manuel)"
+          icon="list.bullet"
           variant="outline"
-          onPress={() => router.push(`/scanner?trainingId=${training.id}`)}
+          onPress={() => router.push(`/presence-list?id=${training.id}`)}
           style={{ marginBottom: 20 }}
         />
 
@@ -138,14 +111,6 @@ export default function QrCoachScreen() {
             <Text style={styles.statLabel}>Absents</Text>
           </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.link}
-          onPress={() => router.push(`/presence-list?id=${training.id}`)}
-        >
-          <Text style={styles.linkText}>Voir la liste complète</Text>
-          <IconSymbol name="chevron.right" size={18} color={Colors.light.primary} />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -158,45 +123,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card,
     borderRadius: Radius.lg,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: { fontSize: 12, color: Colors.light.textSecondary, marginBottom: 4 },
   date: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   loc: { fontSize: 13, color: Colors.light.textSecondary },
-  qrCard: {
+  helpCard: {
     backgroundColor: Colors.light.card,
     borderRadius: Radius.lg,
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
     marginBottom: 20,
+    gap: 8,
   },
-  qrBox: {
-    width: 200,
-    height: 200,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-  },
-  qrInner: { gap: 3 },
-  qrRow: { flexDirection: 'row', gap: 3 },
-  qrCell: { width: 12, height: 12, backgroundColor: '#E5E7EB', borderRadius: 1 },
-  qrCellFilled: { backgroundColor: '#0A2540' },
-  scanHint: {
+  helpTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text, marginTop: 4 },
+  helpText: {
     fontSize: 13,
     color: Colors.light.textSecondary,
     textAlign: 'center',
-    marginTop: 16,
-  },
-  payload: {
-    fontSize: 11,
-    color: Colors.light.textMuted,
-    marginTop: 8,
-    fontFamily: 'monospace',
+    lineHeight: 20,
   },
   statsRow: {
     flexDirection: 'row',
@@ -204,17 +150,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card,
     borderRadius: Radius.lg,
     padding: 16,
-    marginBottom: 16,
   },
   stat: { alignItems: 'center', gap: 4 },
   statDot: { width: 10, height: 10, borderRadius: 5 },
   statNum: { fontSize: 22, fontWeight: '700', color: Colors.light.text },
   statLabel: { fontSize: 12, color: Colors.light.textSecondary },
-  link: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  linkText: { fontSize: 14, fontWeight: '600', color: Colors.light.primary },
 });

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
 import { getTeam } from '@/lib/api';
+import { logout, getSession } from '@/lib/auth';
 import type { Team } from '@/lib/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -19,17 +20,28 @@ export default function PlusScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [team, setTeam] = useState<Team | null>(null);
+  const [coachName, setCoachName] = useState('Coach');
 
   useFocusEffect(
     useCallback(() => {
       getTeam().then(setTeam);
+      getSession().then((s) => {
+        if (s?.name) setCoachName(s.name);
+      });
     }, [])
   );
 
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive' },
+      {
+        text: 'Se déconnecter',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          router.replace('/login');
+        },
+      },
     ]);
   };
 
@@ -39,14 +51,14 @@ export default function PlusScreen() {
       items: [
         {
           icon: 'person.fill',
-          label: team?.coach || 'Coach',
+          label: coachName,
           value: team?.name || 'Volley Team',
           route: '/profil-equipe',
         },
       ],
     },
     {
-      section: '',
+      section: 'Équipe & données',
       items: [
         {
           icon: 'person.2.fill',
@@ -55,17 +67,21 @@ export default function PlusScreen() {
           route: '/profil-equipe',
         },
         {
-          icon: 'bell.fill',
-          label: 'Notifications',
-          value: 'Activées',
-          route: '/notifications',
+          icon: 'chart.bar.fill',
+          label: 'Historique des présences',
+          value: 'Saison complète · Export Excel',
+          route: '/historique',
         },
         {
-          icon: 'qrcode',
-          label: "QR code de l'entraînement",
-          value: 'Mode coach',
-          route: '/(tabs)/entrainements',
+          icon: 'bell.fill',
+          label: 'Notifications',
+          route: '/notifications',
         },
+      ],
+    },
+    {
+      section: 'Application',
+      items: [
         { icon: 'paintbrush', label: 'Apparence', value: 'Système' },
         { icon: 'questionmark.circle', label: 'Aide & support' },
         { icon: 'info.circle', label: 'À propos' },

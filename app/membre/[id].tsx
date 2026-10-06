@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -18,6 +17,7 @@ import { StatusBadge } from '@/components/volley/StatusBadge';
 import { ProgressBar } from '@/components/volley/ProgressBar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
+import { MemberQr } from '@/components/volley/MemberQr';
 
 export default function MembreDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,17 +43,25 @@ export default function MembreDetailScreen() {
   );
 
   const handleDelete = () => {
-    Alert.alert('Supprimer', 'Supprimer définitivement ce membre ?', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteMember(id);
-          router.back();
+    Alert.alert(
+      'Supprimer le membre',
+      `Supprimer définitivement ${member?.first_name ?? ''} ${member?.last_name ?? ''} ?\nSes présences seront aussi effacées.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await deleteMember(id);
+            if (ok) {
+              router.replace('/(tabs)/equipe');
+            } else {
+              Alert.alert('Erreur', 'Impossible de supprimer ce membre.');
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleToggleStatus = async () => {
@@ -87,18 +95,8 @@ export default function MembreDetailScreen() {
       <Header
         title=""
         showBack
-        rightIcon="ellipsis"
-        onRightPress={() =>
-          Alert.alert('Actions', undefined, [
-            { text: 'Modifier', onPress: () => router.push(`/modifier-membre/${member.id}`) },
-            {
-              text: member.status === 'actif' ? 'Désactiver' : 'Réactiver',
-              onPress: handleToggleStatus,
-            },
-            { text: 'Supprimer', style: 'destructive', onPress: handleDelete },
-            { text: 'Annuler', style: 'cancel' },
-          ])
-        }
+        rightIcon="pencil"
+        onRightPress={() => router.push(`/modifier-membre/${member.id}`)}
       />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -119,19 +117,8 @@ export default function MembreDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.tabs}>
-          <View style={[styles.tab, styles.tabActive]}>
-            <Text style={[styles.tabText, styles.tabTextActive]}>Informations</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => router.push(`/stats-joueur/${member.id}`)}
-          >
-            <Text style={styles.tabText}>Statistiques</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.card}>
+          <Text style={styles.cardTitle}>Informations</Text>
           {member.phone ? <InfoRow icon="phone.fill" label="Téléphone" value={member.phone} /> : null}
           {member.email ? <InfoRow icon="envelope.fill" label="Email" value={member.email} /> : null}
           {member.birth_date ? (
@@ -143,11 +130,11 @@ export default function MembreDetailScreen() {
           {member.address ? (
             <InfoRow icon="mappin" label="Adresse" value={member.address} />
           ) : null}
-          {!member.phone && !member.email && !member.birth_date && !member.birth_place && !member.address && (
+          {!member.phone && !member.email && !member.birth_date && !member.birth_place && !member.address ? (
             <Text style={{ color: Colors.light.textMuted, fontSize: 14 }}>
               Aucune information complémentaire
             </Text>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -169,18 +156,37 @@ export default function MembreDetailScreen() {
           <ProgressBar progress={stats.rate} height={10} />
         </View>
 
-        <View style={styles.actions}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>QR personnel</Text>
+          <Text style={styles.qrHint}>
+            Présentez ce QR au coach le jour de l'entraînement pour le pointage
+          </Text>
+          <View style={styles.qrPlaceholder}>
+            <MemberQr memberId={member.id} size={180} />
+          </View>
+        </View>
+
+        {/* Actions : Ajouter (via liste), Modifier, Désactiver, Supprimer */}
+        <View style={[styles.card, { marginBottom: 24 }]}>
+          <Text style={styles.cardTitle}>Actions</Text>
           <PrimaryButton
             title="Modifier"
             icon="pencil"
             onPress={() => router.push(`/modifier-membre/${member.id}`)}
-            style={{ flex: 1 }}
           />
           <PrimaryButton
             title={member.status === 'actif' ? 'Désactiver' : 'Réactiver'}
+            icon="person.fill"
             variant="outline"
             onPress={handleToggleStatus}
-            style={{ flex: 1 }}
+            style={{ marginTop: 10 }}
+          />
+          <PrimaryButton
+            title="Supprimer définitivement"
+            icon="trash"
+            variant="danger"
+            onPress={handleDelete}
+            style={{ marginTop: 10 }}
           />
         </View>
       </ScrollView>
@@ -228,18 +234,6 @@ const styles = StyleSheet.create({
   name: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 14 },
   number: { color: 'rgba(255,255,255,0.7)', fontSize: 16, marginTop: 4 },
   position: { color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 2 },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: Colors.light.card,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: Radius.md,
-    padding: 3,
-  },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: Radius.sm },
-  tabActive: { backgroundColor: Colors.light.primary },
-  tabText: { fontSize: 14, fontWeight: '500', color: Colors.light.textSecondary },
-  tabTextActive: { color: '#fff', fontWeight: '600' },
   card: {
     backgroundColor: Colors.light.card,
     marginHorizontal: 16,
@@ -255,5 +249,6 @@ const styles = StyleSheet.create({
   rateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   rateLabel: { fontSize: 14, color: Colors.light.text },
   rateVal: { fontSize: 14, fontWeight: '700', color: Colors.light.success },
-  actions: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginTop: 20 },
+  qrPlaceholder: { alignItems: 'center', paddingVertical: 8 },
+  qrHint: { fontSize: 13, color: Colors.light.textMuted, textAlign: 'center', marginBottom: 8 },
 });
