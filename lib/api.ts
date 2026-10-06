@@ -3,6 +3,7 @@
  */
 import { getDb, generateId, nowIso } from './database';
 import type { Member, Presence, PresenceStatus, Team, Training } from './types';
+import type { MemberFee } from './types';
 
 // ─── Teams ───────────────────────────────────────────────
 
@@ -51,8 +52,8 @@ export async function createMember(
   await db.runAsync(
     `INSERT INTO members (
       id, team_id, first_name, last_name, number, position, phone, email,
-      birth_date, birth_place, address, status, avatar, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      birth_date, birth_place, address, status, avatar, qr_code, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       team.id,
@@ -67,6 +68,7 @@ export async function createMember(
       member.address ?? null,
       member.status ?? 'actif',
       member.avatar ?? null,
+      `HMVB-${id}`,
       now,
       now,
     ]
@@ -467,4 +469,66 @@ export async function getActiveTrainingsWithStats() {
   );
   const archSet = new Set((archived ?? []).map((a) => a.id));
   return all.filter((t) => !archSet.has(t.id));
+}
+
+
+// ─── Écolage (janvier → décembre) ────────────────────────
+
+
+export async function getMemberFees(memberId: string, year: number): Promise<MemberFee[]> {
+  const db = await getDb();
+  // Ensure 12 months exist
+  const now = nowIso();
+  for (let month = 1; month <= 12; month++) {
+    const existing = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM member_fees WHERE member_id = ? AND year = ? AND month = ?',
+      [memberId, year, month]
+    );
+    if (!existing) {
+      await db.runAsync(
+        `INSERT INTO member_fees (id, member_id, year, month, paid, amount, paid_at, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, null, null, null, ?, ?)`,
+        [generateId(), memberId, year, month, now, now]
+      );
+    }
+  }
+  return (
+    (await db.getAllAsync<MemberFee>(
+      'SELECT * FROM member_fees WHERE member_id = ? AND year = ? ORDER BY month ASC',
+      [memberId, year]
+    )) ?? []
+  );
+}
+
+export async function setMemberFeePaid(
+  memberId: string,
+  year: number,
+  month: number,
+  paid: boolean,
+  amount?: number | null
+): Promise<void> {
+  const db = await getDb();
+  const now = nowIso();
+  const row = await db.getFirstAsync<{ id: string }>(
+    'SELECT id FROM member_fees WHERE member_id = ? AND year = ? AND month = ?',
+    [memberId, year, month]
+  );
+  if (row) {
+    await db.runAsync(
+      `UPDATE member_fees SET paid = ?, amount = ?, paid_at = ?, updated_at = ? WHERE id = ?`,
+      [paid ? 1 : 0, amount ?? null, paid ? now : null, now, row.id]
+    );
+  } else {
+    await db.runAsync(
+      `INSERT INTO member_fees (id, member_id, year, month, paid, amount, paid_at, notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, null, ?, ?)`,
+      [generateId(), memberId, year, month, paid ? 1 : 0, amount ?? null, paid ? now : null, now, now]
+    );
+  }
+}
+
+export async function getMemberFeeSummary(memberId: string, year: number): Promise<{ paid: number; total: number }> {
+  const fees = await getMemberFees(memberId, year);
+  const paid = fees.filter((f) => f.paid === 1).length;
+  return { paid, total: 12 };
 }

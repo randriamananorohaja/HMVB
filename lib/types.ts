@@ -22,6 +22,8 @@ export interface Member {
   address?: string | null;
   status: MemberStatus | string;
   avatar?: string | null;
+  /** Code QR permanent (généré à la création, jamais modifié) */
+  qr_code: string;
   created_at: string;
   updated_at: string;
 }
@@ -66,3 +68,22 @@ export const POSITIONS: Position[] = [
   'Libéro',
   'Réceptionneuse',
 ];
+
+
+export type MemberFee = {
+  id: string;
+  member_id: string;
+  year: number;
+  month: number; // 1-12
+  paid: number; // 0 | 1
+  amount?: number | null;
+  paid_at?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const MONTHS_FR = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+] as const;

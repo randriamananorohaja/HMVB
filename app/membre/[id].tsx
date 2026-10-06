@@ -162,7 +162,7 @@ export default function MembreDetailScreen() {
             Présentez ce QR au coach le jour de l'entraînement pour le pointage
           </Text>
           <View style={styles.qrPlaceholder}>
-            <MemberQr memberId={member.id} size={180} />
+            <MemberQr qrCode={member.qr_code || `HMVB-${member.id}`} size={180} />
           </View>
         </View>
 
@@ -170,9 +170,15 @@ export default function MembreDetailScreen() {
         <View style={[styles.card, { marginBottom: 24 }]}>
           <Text style={styles.cardTitle}>Actions</Text>
           <PrimaryButton
+            title="Écolage (paiements)"
+            icon="calendar"
+            onPress={() => router.push(`/ecolage/${member.id}`)}
+          />
+          <PrimaryButton
             title="Modifier"
             icon="pencil"
             onPress={() => router.push(`/modifier-membre/${member.id}`)}
+            style={{ marginTop: 10 }}
           />
           <PrimaryButton
             title={member.status === 'actif' ? 'Désactiver' : 'Réactiver'}

@@ -42,6 +42,7 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
       address TEXT,
       status TEXT NOT NULL DEFAULT 'actif',
       avatar TEXT,
+      qr_code TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
@@ -74,6 +75,21 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
       FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS member_fees (
+      id TEXT PRIMARY KEY NOT NULL,
+      member_id TEXT NOT NULL,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      paid INTEGER NOT NULL DEFAULT 0,
+      amount REAL,
+      paid_at TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(member_id, year, month),
+      FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY NOT NULL,
       title TEXT NOT NULL,
@@ -84,6 +100,40 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
       created_at TEXT NOT NULL
     );
   `);
+
+  // Migrations légères (anciennes bases)
+  try {
+    await database.execAsync(`ALTER TABLE members ADD COLUMN qr_code TEXT`);
+  } catch {}
+  try {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS member_fees (
+        id TEXT PRIMARY KEY NOT NULL,
+        member_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        paid INTEGER NOT NULL DEFAULT 0,
+        amount REAL,
+        paid_at TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(member_id, year, month),
+        FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+      );
+    `);
+  } catch {}
+  // Backfill qr_code manquants (stable = basé sur id)
+  const missing = await database.getAllAsync<{ id: string }>(
+    `SELECT id FROM members WHERE qr_code IS NULL OR qr_code = ''`
+  );
+  for (const m of missing ?? []) {
+    await database.runAsync(`UPDATE members SET qr_code = ? WHERE id = ?`, [
+      `HMVB-${m.id}`,
+      m.id,
+    ]);
+  }
+
 
   // Ensure at least one team exists
   const team = await database.getFirstAsync<{ id: string }>('SELECT id FROM teams LIMIT 1');

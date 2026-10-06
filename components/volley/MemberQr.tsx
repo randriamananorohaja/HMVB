@@ -3,18 +3,17 @@ import { View, Text, Image, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/theme';
 
 /**
- * QR personnel du joueur — sans react-native-svg / qrcode-svg
- * (évite l'erreur Node "buffer" sur le runtime natif).
- *
- * Affiche une image QR via API publique + le code texte en secours.
+ * QR personnel permanent du joueur.
+ * Utilise le code fixe généré à la création (qr_code), jamais recalculé.
  */
 type Props = {
-  memberId: string;
+  /** Code permanent, ex. HMVB-<uuid> */
+  qrCode: string;
   size?: number;
 };
 
-export function MemberQr({ memberId, size = 180 }: Props) {
-  const payload = `member:${memberId}`;
+export function MemberQr({ qrCode, size = 180 }: Props) {
+  const payload = qrCode.startsWith('member:') ? qrCode : `member:${qrCode}`;
   const uri = `https://api.qrserver.com/v1/create-qr-code/?size=${size * 2}x${size * 2}&margin=8&data=${encodeURIComponent(payload)}`;
 
   return (
@@ -28,7 +27,7 @@ export function MemberQr({ memberId, size = 180 }: Props) {
       <Text style={styles.code} selectable>
         {payload}
       </Text>
-      <Text style={styles.hint}>Scannable par le coach · code aussi lisible hors ligne</Text>
+      <Text style={styles.hint}>Code unique · inchangé même si les infos sont modifiées</Text>
     </View>
   );
 }
@@ -37,9 +36,11 @@ const styles = StyleSheet.create({
   wrap: { alignItems: 'center', paddingVertical: 8 },
   code: {
     marginTop: 12,
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.light.textSecondary,
     fontFamily: 'monospace',
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
   hint: {
     marginTop: 4,

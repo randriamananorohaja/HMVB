@@ -77,7 +77,16 @@ export default function ScannerScreen() {
       }
 
       const members = await getMembers();
-      const member = members.find((m) => m.id === memberId);
+      // Résolution stable : id OU qr_code permanent (même après modification des infos)
+      const rawCode = memberId;
+      const member = members.find(
+        (m) =>
+          m.id === rawCode ||
+          m.qr_code === rawCode ||
+          m.qr_code === `HMVB-${rawCode}` ||
+          `HMVB-${m.id}` === rawCode ||
+          m.id === rawCode.replace(/^HMVB-/, '')
+      );
       if (!member) {
         Alert.alert('Erreur', 'Joueur introuvable dans la base', [
           { text: 'OK', onPress: () => setScanned(false) },

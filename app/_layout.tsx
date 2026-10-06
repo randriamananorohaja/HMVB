@@ -65,6 +65,7 @@ export default function RootLayout() {
         <Stack.Screen name="modifier-entrainement/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="qr-coach" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="presence-list" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="ecolage/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="stats-joueur/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="profil-equipe" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />

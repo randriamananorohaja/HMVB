@@ -1,11 +1,17 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  // Hauteur de la barre système (boutons Android / home indicator iOS)
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 0);
+  const tabBarHeight = 56 + bottomInset;
+
   return (
     <Tabs
       screenOptions={{
@@ -17,13 +23,23 @@ export default function TabLayout() {
           backgroundColor: '#fff',
           borderTopColor: Colors.light.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          height: tabBarHeight,
+          paddingBottom: bottomInset,
           paddingTop: 6,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
+          marginBottom: Platform.OS === 'android' ? 4 : 0,
+        },
+        // Espace pour que le contenu ne passe pas sous la tab bar
+        sceneStyle: {
+          paddingBottom: tabBarHeight,
         },
       }}
     >
@@ -62,7 +78,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="ellipsis" color={color} />,
         }}
       />
-      {/* Hide default explore */}
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
   );
