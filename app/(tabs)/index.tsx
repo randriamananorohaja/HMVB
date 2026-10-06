@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,27 +6,72 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Colors, Radius, Spacing } from '@/constants/theme';
-import { TEAM, TRAININGS, formatDateFr, MEMBERS } from '@/constants/data';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { Colors, Radius } from '@/constants/theme';
+import {
+  getTeam,
+  getMembers,
+  getTrainingsWithStats,
+  getGlobalStats,
+  type TrainingWithStats,
+} from '@/lib/api';
+import type { Team } from '@/lib/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ProgressBar } from '@/components/volley/ProgressBar';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
+import { EmptyState } from '@/components/volley/EmptyState';
 
 export default function AccueilScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const today = TRAININGS[0];
-  const presentCount = today.presents;
-  const total = today.totalMembers;
-  const rate = Math.round((presentCount / total) * 100);
+  const [team, setTeam] = useState<Team | null>(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [today, setToday] = useState<TrainingWithStats | null>(null);
+  const [stats, setStats] = useState({ avgRate: 0, trainingsCount: 0 });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async () => {
+    const [t, members, trainings, g] = await Promise.all([
+      getTeam(),
+      getMembers(),
+      getTrainingsWithStats(),
+      getGlobalStats(),
+    ]);
+    setTeam(t);
+    setMemberCount(members.filter((m) => m.status === 'actif').length);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    setToday(trainings.find((x) => x.date === todayStr) ?? trainings[0] ?? null);
+    setStats({ avgRate: g.avgRate, trainingsCount: g.trainingsCount });
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
+
+  const presentCount = today?.presents ?? 0;
+  const total = today?.total_members ?? memberCount;
+  const rate = total > 0 ? Math.round((presentCount / total) * 100) : 0;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTop}>
           <View style={styles.logoRow}>
@@ -35,12 +80,13 @@ export default function AccueilScreen() {
             </View>
             <View>
               <Text style={styles.greeting}>Bonjour Coach 👋</Text>
-              <Text style={styles.teamName}>Équipe {TEAM.category}</Text>
+              <Text style={styles.teamName}>
+                {team?.name ?? 'Volley Team'} · {team?.category ?? 'Senior'}
+              </Text>
             </View>
           </View>
           <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications')}>
             <IconSymbol name="bell.fill" size={22} color="#fff" />
-            <View style={styles.badge} />
           </TouchableOpacity>
         </View>
       </View>
@@ -49,82 +95,111 @@ export default function AccueilScreen() {
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+          />
+        }
       >
-        {/* Prochain entraînement */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Prochain entraînement</Text>
-          <View style={styles.trainingRow}>
-            <View style={styles.dateBox}>
-              <IconSymbol name="calendar" size={18} color={Colors.light.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.trainingDate}>Aujourd'hui</Text>
-              <Text style={styles.trainingTime}>
-                {today.startTime} – {today.endTime}
-              </Text>
-              <View style={styles.locRow}>
-                <IconSymbol name="mappin" size={14} color={Colors.light.textSecondary} />
-                <Text style={styles.locText}>{today.location}</Text>
+        {today ? (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Prochain entraînement</Text>
+            <View style={styles.trainingRow}>
+              <View style={styles.dateBox}>
+                <IconSymbol name="calendar" size={18} color={Colors.light.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.trainingDate}>
+                  {today.date === new Date().toISOString().slice(0, 10)
+                    ? "Aujourd'hui"
+                    : today.date}
+                </Text>
+                <Text style={styles.trainingTime}>
+                  {today.start_time} – {today.end_time}
+                </Text>
+                <View style={styles.locRow}>
+                  <IconSymbol name="mappin" size={14} color={Colors.light.textSecondary} />
+                  <Text style={styles.locText}>{today.location || '—'}</Text>
+                </View>
               </View>
             </View>
+
+            {total > 0 && (
+              <>
+                <View style={styles.presenceRow}>
+                  <Text style={styles.presenceCount}>
+                    {presentCount} présents / {total}
+                  </Text>
+                  <Text style={styles.presencePct}>{rate}%</Text>
+                </View>
+                <ProgressBar progress={rate} height={10} />
+              </>
+            )}
+
+            <PrimaryButton
+              title="Ouvrir le QR"
+              icon="qrcode"
+              onPress={() => router.push(`/qr-coach?id=${today.id}`)}
+              style={{ marginTop: 16 }}
+            />
           </View>
-
-          <View style={styles.presenceRow}>
-            <Text style={styles.presenceCount}>
-              {presentCount} présents / {total}
-            </Text>
-            <Text style={styles.presencePct}>{rate}%</Text>
+        ) : (
+          <View style={styles.card}>
+            <EmptyState
+              message={"Aucune donnée enregistrée\nCréez un entraînement pour commencer"}
+              icon="calendar"
+            />
+            <PrimaryButton
+              title="Créer un entraînement"
+              icon="plus"
+              onPress={() => router.push('/ajouter-entrainement')}
+            />
           </View>
-          <ProgressBar progress={rate} height={10} />
+        )}
 
-          <PrimaryButton
-            title="Ouvrir le QR"
-            icon="qrcode"
-            onPress={() => router.push(`/qr-coach?id=${today.id}`)}
-            style={{ marginTop: 16 }}
-          />
-        </View>
-
-        {/* Présence aujourd'hui */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Présence aujourd'hui</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: Colors.light.success }]} />
-              <Text style={styles.statNum}>{today.presents}</Text>
-              <Text style={styles.statLabel}>Présents</Text>
+        {today && total > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Présence</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <View style={[styles.statDot, { backgroundColor: Colors.light.success }]} />
+                <Text style={styles.statNum}>{today.presents}</Text>
+                <Text style={styles.statLabel}>Présents</Text>
+              </View>
+              <View style={styles.statItem}>
+                <View style={[styles.statDot, { backgroundColor: Colors.light.warning }]} />
+                <Text style={styles.statNum}>{today.retards}</Text>
+                <Text style={styles.statLabel}>En retard</Text>
+              </View>
+              <View style={styles.statItem}>
+                <View style={[styles.statDot, { backgroundColor: Colors.light.danger }]} />
+                <Text style={styles.statNum}>{today.absents}</Text>
+                <Text style={styles.statLabel}>Absents</Text>
+              </View>
             </View>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: Colors.light.warning }]} />
-              <Text style={styles.statNum}>{today.retards}</Text>
-              <Text style={styles.statLabel}>En retard</Text>
-            </View>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: Colors.light.danger }]} />
-              <Text style={styles.statNum}>{today.absents}</Text>
-              <Text style={styles.statLabel}>Absents</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.linkRow}
+              onPress={() => router.push(`/presence-list?id=${today.id}`)}
+            >
+              <Text style={styles.linkText}>Voir la liste complète</Text>
+              <IconSymbol name="chevron.right" size={18} color={Colors.light.primary} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.linkRow}
-            onPress={() => router.push(`/presence-list?id=${today.id}`)}
-          >
-            <Text style={styles.linkText}>Voir la liste complète</Text>
-            <IconSymbol name="chevron.right" size={18} color={Colors.light.primary} />
-          </TouchableOpacity>
-        </View>
+        )}
 
-        {/* Quick actions */}
         <View style={styles.quickRow}>
-          <TouchableOpacity
-            style={styles.quickCard}
-            onPress={() => router.push('/(tabs)/equipe')}
-          >
+          <TouchableOpacity style={styles.quickCard} onPress={() => router.push('/(tabs)/equipe')}>
             <View style={[styles.quickIcon, { backgroundColor: '#DBEAFE' }]}>
               <IconSymbol name="person.2.fill" size={22} color={Colors.light.primary} />
             </View>
             <Text style={styles.quickLabel}>Équipe</Text>
-            <Text style={styles.quickSub}>{MEMBERS.length} membres</Text>
+            <Text style={styles.quickSub}>
+              {memberCount} membre{memberCount !== 1 ? 's' : ''}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.quickCard}
@@ -134,7 +209,9 @@ export default function AccueilScreen() {
               <IconSymbol name="chart.bar.fill" size={22} color={Colors.light.success} />
             </View>
             <Text style={styles.quickLabel}>Stats</Text>
-            <Text style={styles.quickSub}>87% moyenne</Text>
+            <Text style={styles.quickSub}>
+              {stats.trainingsCount === 0 ? 'Aucune donnée' : `${stats.avgRate}% moyenne`}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -144,6 +221,7 @@ export default function AccueilScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
+  center: { alignItems: 'center', justifyContent: 'center' },
   header: {
     backgroundColor: Colors.light.header,
     paddingHorizontal: 20,
@@ -173,15 +251,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.danger,
   },
   scroll: { flex: 1, marginTop: -8 },
   card: {

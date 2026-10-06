@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { MEMBERS } from '@/constants/data';
+import { getMember, deleteMember, updateMember, getMemberPresenceStats } from '@/lib/api';
+import type { Member } from '@/lib/types';
 import { Header } from '@/components/volley/Header';
 import { Avatar } from '@/components/volley/Avatar';
 import { StatusBadge } from '@/components/volley/StatusBadge';
@@ -20,13 +22,62 @@ import { PrimaryButton } from '@/components/volley/PrimaryButton';
 export default function MembreDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const member = MEMBERS.find((m) => m.id === id);
+  const [member, setMember] = useState<Member | null>(null);
+  const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0, rate: 0 });
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    const data = await getMember(id);
+    setMember(data);
+    if (data) {
+      const s = await getMemberPresenceStats(data.id);
+      setStats(s);
+    }
+    setLoading(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [id])
+  );
+
+  const handleDelete = () => {
+    Alert.alert('Supprimer', 'Supprimer définitivement ce membre ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteMember(id);
+          router.back();
+        },
+      },
+    ]);
+  };
+
+  const handleToggleStatus = async () => {
+    if (!member) return;
+    const next = member.status === 'actif' ? 'desactive' : 'actif';
+    await updateMember(member.id, { status: next });
+    load();
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
 
   if (!member) {
     return (
       <View style={styles.container}>
         <Header title="Membre" showBack />
-        <Text style={{ padding: 20 }}>Membre introuvable</Text>
+        <Text style={{ padding: 20, color: Colors.light.textSecondary }}>
+          Aucune donnée enregistrée
+        </Text>
       </View>
     );
   }
@@ -40,29 +91,34 @@ export default function MembreDetailScreen() {
         onRightPress={() =>
           Alert.alert('Actions', undefined, [
             { text: 'Modifier', onPress: () => router.push(`/modifier-membre/${member.id}`) },
-            { text: 'QR personnel', onPress: () => {} },
-            { text: 'Désactiver', style: 'destructive' },
-            { text: 'Supprimer', style: 'destructive' },
+            {
+              text: member.status === 'actif' ? 'Désactiver' : 'Réactiver',
+              onPress: handleToggleStatus,
+            },
+            { text: 'Supprimer', style: 'destructive', onPress: handleDelete },
             { text: 'Annuler', style: 'cancel' },
           ])
         }
       />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Profile header */}
         <View style={styles.profileHeader}>
-          <Avatar firstName={member.firstName} lastName={member.lastName} size={90} />
+          <Avatar
+            firstName={member.first_name}
+            lastName={member.last_name}
+            size={90}
+            uri={member.avatar}
+          />
           <Text style={styles.name}>
-            {member.firstName.toUpperCase()} {member.lastName.toUpperCase()}
+            {member.first_name.toUpperCase()} {member.last_name.toUpperCase()}
           </Text>
           <Text style={styles.number}>#{member.number}</Text>
           <Text style={styles.position}>{member.position}</Text>
           <View style={{ marginTop: 8 }}>
-            <StatusBadge status={member.status} size="md" />
+            <StatusBadge status={member.status as any} size="md" />
           </View>
         </View>
 
-        {/* Tabs */}
         <View style={styles.tabs}>
           <View style={[styles.tab, styles.tabActive]}>
             <Text style={[styles.tabText, styles.tabTextActive]}>Informations</Text>
@@ -75,48 +131,42 @@ export default function MembreDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Info */}
         <View style={styles.card}>
-          <InfoRow icon="phone.fill" label="Téléphone" value={member.phone} />
-          {member.email && (
-            <InfoRow icon="envelope.fill" label="Email" value={member.email} />
-          )}
-          {member.birthDate && (
-            <InfoRow icon="calendar" label="Date de naissance" value={member.birthDate} />
+          {member.phone ? <InfoRow icon="phone.fill" label="Téléphone" value={member.phone} /> : null}
+          {member.email ? <InfoRow icon="envelope.fill" label="Email" value={member.email} /> : null}
+          {member.birth_date ? (
+            <InfoRow icon="calendar" label="Date de naissance" value={member.birth_date} />
+          ) : null}
+          {member.birth_place ? (
+            <InfoRow icon="mappin" label="Lieu de naissance" value={member.birth_place} />
+          ) : null}
+          {member.address ? (
+            <InfoRow icon="mappin" label="Adresse" value={member.address} />
+          ) : null}
+          {!member.phone && !member.email && !member.birth_date && !member.birth_place && !member.address && (
+            <Text style={{ color: Colors.light.textMuted, fontSize: 14 }}>
+              Aucune information complémentaire
+            </Text>
           )}
         </View>
 
-        {/* Stats présence */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Statistiques présence</Text>
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={[styles.statNum, { color: Colors.light.success }]}>
-                {member.presents}
-              </Text>
+              <Text style={[styles.statNum, { color: Colors.light.success }]}>{stats.presents}</Text>
               <Text style={styles.statLabel}>Présences</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={[styles.statNum, { color: Colors.light.danger }]}>
-                {member.absents}
-              </Text>
+              <Text style={[styles.statNum, { color: Colors.light.danger }]}>{stats.absents}</Text>
               <Text style={styles.statLabel}>Absences</Text>
             </View>
           </View>
           <View style={styles.rateRow}>
             <Text style={styles.rateLabel}>Taux de présence</Text>
-            <Text style={styles.rateVal}>{member.presenceRate}%</Text>
+            <Text style={styles.rateVal}>{stats.rate}%</Text>
           </View>
-          <ProgressBar progress={member.presenceRate} height={10} />
-        </View>
-
-        {/* QR personnel */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>QR personnel</Text>
-          <View style={styles.qrPlaceholder}>
-            <IconSymbol name="qrcode" size={80} color={Colors.light.textMuted} />
-            <Text style={styles.qrHint}>Scannez pour enregistrer la présence</Text>
-          </View>
+          <ProgressBar progress={stats.rate} height={10} />
         </View>
 
         <View style={styles.actions}>
@@ -127,9 +177,9 @@ export default function MembreDetailScreen() {
             style={{ flex: 1 }}
           />
           <PrimaryButton
-            title="Désactiver"
+            title={member.status === 'actif' ? 'Désactiver' : 'Réactiver'}
             variant="outline"
-            onPress={() => {}}
+            onPress={handleToggleStatus}
             style={{ flex: 1 }}
           />
         </View>
@@ -144,7 +194,7 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
       <View style={infoStyles.icon}>
         <IconSymbol name={icon} size={18} color={Colors.light.primary} />
       </View>
-      <View>
+      <View style={{ flex: 1 }}>
         <Text style={infoStyles.label}>{label}</Text>
         <Text style={infoStyles.value}>{value}</Text>
       </View>
@@ -168,6 +218,7 @@ const infoStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
+  center: { alignItems: 'center', justifyContent: 'center' },
   profileHeader: {
     backgroundColor: Colors.light.header,
     alignItems: 'center',
@@ -201,19 +252,8 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, alignItems: 'center' },
   statNum: { fontSize: 28, fontWeight: '700' },
   statLabel: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
-  rateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
+  rateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   rateLabel: { fontSize: 14, color: Colors.light.text },
   rateVal: { fontSize: 14, fontWeight: '700', color: Colors.light.success },
-  qrPlaceholder: { alignItems: 'center', paddingVertical: 20, gap: 10 },
-  qrHint: { fontSize: 13, color: Colors.light.textMuted },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginHorizontal: 16,
-    marginTop: 20,
-  },
+  actions: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginTop: 20 },
 });

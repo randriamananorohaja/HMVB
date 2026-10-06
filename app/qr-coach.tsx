@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Share } from 'react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { TRAININGS, formatDateFr } from '@/constants/data';
+import { getTraining, getTrainingsWithStats, formatDateFr } from '@/lib/api';
+import type { Training } from '@/lib/types';
 import { Header } from '@/components/volley/Header';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
@@ -10,7 +11,55 @@ import { PrimaryButton } from '@/components/volley/PrimaryButton';
 export default function QrCoachScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
-  const training = TRAININGS.find((t) => t.id === id) ?? TRAININGS[0];
+  const [training, setTraining] = useState<Training | null>(null);
+  const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0 });
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    const [t, list] = await Promise.all([getTraining(id), getTrainingsWithStats()]);
+    setTraining(t);
+    const s = list.find((x) => x.id === id);
+    if (s) setStats({ presents: s.presents, retards: s.retards, absents: s.absents });
+    setLoading(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [id])
+  );
+
+  const qrPayload = training ? `training:${training.id}` : '';
+
+  const shareQr = async () => {
+    if (!qrPayload) return;
+    await Share.share({
+      message: `QR VolleyTeam — scannnez pour l'entraînement\n${qrPayload}`,
+    });
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
+
+  if (!training) {
+    return (
+      <View style={styles.container}>
+        <Header title="QR de l'entraînement" showBack />
+        <Text style={{ padding: 20, color: Colors.light.textSecondary }}>
+          Aucune donnée enregistrée
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -20,26 +69,27 @@ export default function QrCoachScreen() {
         <View style={styles.infoCard}>
           <Text style={styles.label}>Entraînement</Text>
           <Text style={styles.date}>
-            {formatDateFr(training.date)} · {training.startTime} – {training.endTime}
+            {formatDateFr(training.date)} · {training.start_time} – {training.end_time}
           </Text>
           <View style={styles.locRow}>
             <IconSymbol name="mappin" size={14} color={Colors.light.textSecondary} />
-            <Text style={styles.loc}>{training.location}</Text>
+            <Text style={styles.loc}>{training.location || '—'}</Text>
           </View>
         </View>
 
         <View style={styles.qrCard}>
           <View style={styles.qrBox}>
-            {/* Simulated QR */}
+            {/* Pattern visual representing QR — payload is training:id */}
             <View style={styles.qrInner}>
               {Array.from({ length: 11 }).map((_, row) => (
                 <View key={row} style={styles.qrRow}>
                   {Array.from({ length: 11 }).map((_, col) => {
+                    const seed = (training.id.charCodeAt(row % training.id.length) + col * 3 + row) % 5;
                     const filled =
                       (row < 3 && col < 3) ||
                       (row < 3 && col > 7) ||
                       (row > 7 && col < 3) ||
-                      ((row + col) % 3 === 0 && row > 2 && row < 8 && col > 2 && col < 8);
+                      seed === 0;
                     return (
                       <View
                         key={col}
@@ -51,32 +101,40 @@ export default function QrCoachScreen() {
               ))}
             </View>
           </View>
-          <Text style={styles.scanHint}>
-            Scannez ce QR pour enregistrer votre présence
+          <Text style={styles.scanHint}>Scannez ce QR pour enregistrer votre présence</Text>
+          <Text style={styles.payload} numberOfLines={1}>
+            {qrPayload}
           </Text>
         </View>
 
         <PrimaryButton
-          title="Partager / Afficher en plein écran"
+          title="Partager / Afficher"
           icon="share"
-          onPress={() => {}}
+          onPress={shareQr}
+          style={{ marginBottom: 12 }}
+        />
+        <PrimaryButton
+          title="Ouvrir le scanner"
+          icon="camera.fill"
+          variant="outline"
+          onPress={() => router.push(`/scanner?trainingId=${training.id}`)}
           style={{ marginBottom: 20 }}
         />
 
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <View style={[styles.statDot, { backgroundColor: Colors.light.success }]} />
-            <Text style={styles.statNum}>{training.presents}</Text>
+            <Text style={styles.statNum}>{stats.presents}</Text>
             <Text style={styles.statLabel}>Présents</Text>
           </View>
           <View style={styles.stat}>
             <View style={[styles.statDot, { backgroundColor: Colors.light.warning }]} />
-            <Text style={styles.statNum}>{training.retards}</Text>
+            <Text style={styles.statNum}>{stats.retards}</Text>
             <Text style={styles.statLabel}>En retard</Text>
           </View>
           <View style={styles.stat}>
             <View style={[styles.statDot, { backgroundColor: Colors.light.danger }]} />
-            <Text style={styles.statNum}>{training.absents}</Text>
+            <Text style={styles.statNum}>{stats.absents}</Text>
             <Text style={styles.statLabel}>Absents</Text>
           </View>
         </View>
@@ -133,6 +191,12 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     textAlign: 'center',
     marginTop: 16,
+  },
+  payload: {
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    marginTop: 8,
+    fontFamily: 'monospace',
   },
   statsRow: {
     flexDirection: 'row',

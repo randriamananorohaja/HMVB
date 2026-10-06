@@ -1,8 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { TRAININGS, formatDateFr } from '@/constants/data';
+import {
+  getTraining,
+  getTrainingsWithStats,
+  formatDateFr,
+  deleteTraining,
+} from '@/lib/api';
+import type { Training } from '@/lib/types';
 import { Header } from '@/components/volley/Header';
 import { ProgressBar } from '@/components/volley/ProgressBar';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
@@ -11,12 +17,69 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 export default function EntrainementDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const training = TRAININGS.find((t) => t.id === id) ?? TRAININGS[0];
-  const rate = Math.round((training.presents / training.totalMembers) * 100);
+  const [training, setTraining] = useState<Training | null>(null);
+  const [stats, setStats] = useState({ presents: 0, total: 0, rate: 0 });
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    const [t, list] = await Promise.all([getTraining(id), getTrainingsWithStats()]);
+    setTraining(t);
+    const s = list.find((x) => x.id === id);
+    if (s) {
+      setStats({
+        presents: s.presents,
+        total: s.total_members,
+        rate: s.total_members ? Math.round((s.presents / s.total_members) * 100) : 0,
+      });
+    }
+    setLoading(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [id])
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
+
+  if (!training) {
+    return (
+      <View style={styles.container}>
+        <Header title="Détail" showBack />
+        <Text style={{ padding: 20, color: Colors.light.textSecondary }}>
+          Aucune donnée enregistrée
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Header title="Détail de l'entraînement" showBack rightIcon="pencil" />
+      <Header
+        title="Détail de l'entraînement"
+        showBack
+        rightIcon="trash"
+        onRightPress={() =>
+          Alert.alert('Supprimer', 'Supprimer cet entraînement ?', [
+            { text: 'Annuler', style: 'cancel' },
+            {
+              text: 'Supprimer',
+              style: 'destructive',
+              onPress: async () => {
+                await deleteTraining(id);
+                router.back();
+              },
+            },
+          ])
+        }
+      />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={styles.card}>
           <View style={styles.row}>
@@ -26,12 +89,12 @@ export default function EntrainementDetailScreen() {
           <View style={[styles.row, { marginTop: 8 }]}>
             <IconSymbol name="clock" size={18} color={Colors.light.textSecondary} />
             <Text style={styles.meta}>
-              {training.startTime} – {training.endTime}
+              {training.start_time} – {training.end_time}
             </Text>
           </View>
           <View style={[styles.row, { marginTop: 8 }]}>
             <IconSymbol name="mappin" size={18} color={Colors.light.textSecondary} />
-            <Text style={styles.meta}>{training.location}</Text>
+            <Text style={styles.meta}>{training.location || '—'}</Text>
           </View>
         </View>
 
@@ -39,16 +102,23 @@ export default function EntrainementDetailScreen() {
           <Text style={styles.cardTitle}>Présence</Text>
           <View style={styles.presenceRow}>
             <Text style={styles.presenceCount}>
-              {training.presents} / {training.totalMembers}
+              {stats.presents} / {stats.total}
             </Text>
-            <Text style={styles.presencePct}>{rate}%</Text>
+            <Text style={styles.presencePct}>{stats.rate}%</Text>
           </View>
-          <ProgressBar progress={rate} height={10} />
+          <ProgressBar progress={stats.rate} height={10} />
           <PrimaryButton
             title="QR Présence"
             icon="qrcode"
             onPress={() => router.push(`/qr-coach?id=${training.id}`)}
             style={{ marginTop: 16 }}
+          />
+          <PrimaryButton
+            title="Scanner"
+            icon="camera.fill"
+            variant="outline"
+            onPress={() => router.push(`/scanner?trainingId=${training.id}`)}
+            style={{ marginTop: 10 }}
           />
         </View>
 
@@ -58,18 +128,6 @@ export default function EntrainementDetailScreen() {
             <Text style={styles.notes}>{training.notes}</Text>
           </View>
         ) : null}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Événements</Text>
-          <View style={styles.eventRow}>
-            <IconSymbol name="clock" size={16} color={Colors.light.success} />
-            <Text style={styles.eventText}>{training.startTime} Début de l'entraînement</Text>
-          </View>
-          <View style={styles.eventRow}>
-            <IconSymbol name="clock" size={16} color={Colors.light.danger} />
-            <Text style={styles.eventText}>{training.endTime} Fin de l'entraînement</Text>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
@@ -95,6 +153,4 @@ const styles = StyleSheet.create({
   presenceCount: { fontSize: 18, fontWeight: '700', color: Colors.light.text },
   presencePct: { fontSize: 16, fontWeight: '700', color: Colors.light.success },
   notes: { fontSize: 14, color: Colors.light.textSecondary, lineHeight: 20 },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  eventText: { fontSize: 14, color: Colors.light.text },
 });

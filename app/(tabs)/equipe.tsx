@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,24 +7,44 @@ import {
   TouchableOpacity,
   TextInput,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { MEMBERS, Member } from '@/constants/data';
+import { getMembers } from '@/lib/api';
+import type { Member } from '@/lib/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Avatar } from '@/components/volley/Avatar';
 import { StatusBadge } from '@/components/volley/StatusBadge';
+import { EmptyState } from '@/components/volley/EmptyState';
 
 export default function EquipeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filtered = MEMBERS.filter(
+  const loadMembers = async () => {
+    const data = await getMembers();
+    setMembers(data);
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMembers();
+    }, [])
+  );
+
+  const filtered = members.filter(
     (m) =>
-      m.firstName.toLowerCase().includes(query.toLowerCase()) ||
-      m.lastName.toLowerCase().includes(query.toLowerCase()) ||
+      m.first_name.toLowerCase().includes(query.toLowerCase()) ||
+      m.last_name.toLowerCase().includes(query.toLowerCase()) ||
       String(m.number).includes(query)
   );
 
@@ -34,19 +54,32 @@ export default function EquipeScreen() {
       onPress={() => router.push(`/membre/${item.id}`)}
       activeOpacity={0.7}
     >
-      <Avatar firstName={item.firstName} lastName={item.lastName} size={48} />
+      <Avatar
+        firstName={item.first_name}
+        lastName={item.last_name}
+        size={48}
+        uri={item.avatar}
+      />
       <View style={styles.memberInfo}>
         <Text style={styles.memberName}>
-          {item.firstName} {item.lastName}
+          {item.first_name} {item.last_name}
         </Text>
         <Text style={styles.memberPos}>
           #{item.number} · {item.position}
         </Text>
       </View>
-      <StatusBadge status={item.status} />
+      <StatusBadge status={item.status as any} />
       <IconSymbol name="chevron.right" size={18} color={Colors.light.textMuted} />
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -64,23 +97,33 @@ export default function EquipeScreen() {
               onChangeText={setQuery}
             />
           </View>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => router.push('/ajouter-membre')}
-          >
+          <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/ajouter-membre')}>
             <IconSymbol name="plus" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.count}>{MEMBERS.length} membres</Text>
+        <Text style={styles.count}>{members.length} membre{members.length !== 1 ? 's' : ''}</Text>
       </View>
 
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadMembers(); }} />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            message={
+              query
+                ? 'Aucun membre trouvé pour cette recherche'
+                : 'Aucune donnée enregistrée\nAjoutez votre premier joueur'
+            }
+            icon="person.2.fill"
+          />
+        }
       />
     </View>
   );
@@ -88,6 +131,7 @@ export default function EquipeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
+  center: { alignItems: 'center', justifyContent: 'center' },
   header: {
     backgroundColor: Colors.light.header,
     paddingHorizontal: 16,
@@ -120,11 +164,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  count: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    marginTop: 10,
-  },
+  count: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 10 },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',

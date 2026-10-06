@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,56 +6,144 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { MEMBERS, TODAY_PRESENCE, TRAININGS, PresenceStatus } from '@/constants/data';
+import {
+  getMembers,
+  getTraining,
+  getPresencesForTraining,
+  setPresence,
+  getTrainingsWithStats,
+} from '@/lib/api';
+import type { Member, PresenceStatus } from '@/lib/types';
 import { Header } from '@/components/volley/Header';
 import { Avatar } from '@/components/volley/Avatar';
 import { StatusBadge } from '@/components/volley/StatusBadge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { EmptyState } from '@/components/volley/EmptyState';
+
+type Row = {
+  member: Member;
+  status: PresenceStatus;
+  time?: string | null;
+};
 
 export default function PresenceListScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const router = useRouter();
-  const training = TRAININGS.find((t) => t.id === id) ?? TRAININGS[0];
+  const [rows, setRows] = useState<Row[]>([]);
+  const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0 });
+  const [dateLabel, setDateLabel] = useState('');
   const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const records = MEMBERS.map((m) => {
-    const rec = TODAY_PRESENCE.find((p) => p.memberId === m.id);
-    return {
-      member: m,
-      status: (rec?.status ?? 'absent') as PresenceStatus,
-      time: rec?.time,
-    };
-  }).filter(
-    (r) =>
-      r.member.firstName.toLowerCase().includes(query.toLowerCase()) ||
-      r.member.lastName.toLowerCase().includes(query.toLowerCase())
+  const load = async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    const [training, members, presences, withStats] = await Promise.all([
+      getTraining(id),
+      getMembers(),
+      getPresencesForTraining(id),
+      getTrainingsWithStats(),
+    ]);
+    const ts = withStats.find((t) => t.id === id);
+    if (ts) {
+      setStats({ presents: ts.presents, retards: ts.retards, absents: ts.absents });
+    }
+    if (training) {
+      setDateLabel(`${training.date} · ${training.start_time}`);
+    }
+    const byMember = Object.fromEntries(presences.map((p) => [p.member_id, p]));
+    const active = members.filter((m) => m.status === 'actif');
+    setRows(
+      active.map((m) => {
+        const p = byMember[m.id];
+        return {
+          member: m,
+          status: (p?.status as PresenceStatus) || 'absent',
+          time: p?.time,
+        };
+      })
+    );
+    setLoading(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [id])
   );
+
+  const changeStatus = (memberId: string) => {
+    if (!id) return;
+    Alert.alert('Statut de présence', undefined, [
+      {
+        text: 'Présent',
+        onPress: async () => {
+          const now = new Date();
+          const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          await setPresence(id, memberId, 'present', time);
+          load();
+        },
+      },
+      {
+        text: 'En retard',
+        onPress: async () => {
+          const now = new Date();
+          const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          await setPresence(id, memberId, 'retard', time);
+          load();
+        },
+      },
+      {
+        text: 'Absent',
+        onPress: async () => {
+          await setPresence(id, memberId, 'absent');
+          load();
+        },
+      },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  };
+
+  const filtered = rows.filter(
+    (r) =>
+      r.member.first_name.toLowerCase().includes(query.toLowerCase()) ||
+      r.member.last_name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Header title="Présence" showBack />
 
       <View style={styles.summary}>
-        <Text style={styles.dateLabel}>
-          {training.date} · {training.startTime}
-        </Text>
+        <Text style={styles.dateLabel}>{dateLabel || '—'}</Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <View style={[styles.dot, { backgroundColor: Colors.light.success }]} />
-            <Text style={styles.statNum}>{training.presents}</Text>
+            <Text style={styles.statNum}>{stats.presents}</Text>
             <Text style={styles.statLabel}>Présents</Text>
           </View>
           <View style={styles.stat}>
             <View style={[styles.dot, { backgroundColor: Colors.light.warning }]} />
-            <Text style={styles.statNum}>{training.retards}</Text>
+            <Text style={styles.statNum}>{stats.retards}</Text>
             <Text style={styles.statLabel}>Retard</Text>
           </View>
           <View style={styles.stat}>
             <View style={[styles.dot, { backgroundColor: Colors.light.danger }]} />
-            <Text style={styles.statNum}>{training.absents}</Text>
+            <Text style={styles.statNum}>{stats.absents}</Text>
             <Text style={styles.statLabel}>Absents</Text>
           </View>
         </View>
@@ -73,36 +161,31 @@ export default function PresenceListScreen() {
       </View>
 
       <FlatList
-        data={records}
+        data={filtered}
         keyExtractor={(item) => item.member.id}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 80, flexGrow: 1 }}
+        ListEmptyComponent={
+          <EmptyState message="Aucune donnée enregistrée" icon="person.2.fill" />
+        }
         renderItem={({ item }) => (
-          <View style={styles.row}>
+          <TouchableOpacity style={styles.row} onPress={() => changeStatus(item.member.id)}>
             <Avatar
-              firstName={item.member.firstName}
-              lastName={item.member.lastName}
+              firstName={item.member.first_name}
+              lastName={item.member.last_name}
               size={42}
+              uri={item.member.avatar}
             />
             <View style={styles.info}>
               <Text style={styles.name}>
-                {item.member.firstName} {item.member.lastName}
+                {item.member.first_name} {item.member.last_name}
               </Text>
-              {item.time ? (
-                <Text style={styles.time}>{item.time}</Text>
-              ) : (
-                <Text style={styles.time}>—</Text>
-              )}
+              <Text style={styles.time}>{item.time || '—'}</Text>
             </View>
             <StatusBadge status={item.status} />
-          </View>
+          </TouchableOpacity>
         )}
         ItemSeparatorComponent={() => <View style={styles.sep} />}
       />
-
-      <TouchableOpacity style={styles.fab} onPress={() => {}}>
-        <IconSymbol name="plus" size={22} color="#fff" />
-        <Text style={styles.fabText}>Ajouter manuellement</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -151,18 +234,4 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '600', color: Colors.light.text },
   time: { fontSize: 13, color: Colors.light.textSecondary, marginTop: 2 },
   sep: { height: 1, backgroundColor: Colors.light.border, marginLeft: 70 },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 14,
-    borderRadius: Radius.md,
-  },
-  fabText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

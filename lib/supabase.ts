@@ -1,10 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Missing Supabase environment variables. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/**
+ * Client Supabase optionnel (non requis).
+ * L'application utilise SQLite local (lib/database.ts + lib/api.ts).
+ * Conservé pour une migration cloud future.
+ */
+export const supabase = null as any;

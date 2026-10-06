@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,43 +9,22 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { TEAM } from '@/constants/data';
+import { getTeam } from '@/lib/api';
+import type { Team } from '@/lib/types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Avatar } from '@/components/volley/Avatar';
-
-type MenuItem = {
-  icon: string;
-  label: string;
-  value?: string;
-  route?: string;
-  danger?: boolean;
-};
-
-const MENU: { section: string; items: MenuItem[] }[] = [
-  {
-    section: 'Mon compte',
-    items: [
-      { icon: 'person.fill', label: 'Rakoto Andry', value: 'coach@volleyteam.mg', route: '/profil-coach' },
-    ],
-  },
-  {
-    section: '',
-    items: [
-      { icon: 'person.2.fill', label: 'Équipe', value: TEAM.name, route: '/profil-equipe' },
-      { icon: 'bell.fill', label: 'Notifications', value: 'Activées', route: '/notifications' },
-      { icon: 'qrcode', label: "QR code de l'entraînement", value: 'Mode par défaut : coach', route: '/qr-coach' },
-      { icon: 'paintbrush', label: 'Apparence', value: 'Système' },
-      { icon: 'questionmark.circle', label: 'Aide & support' },
-      { icon: 'info.circle', label: 'À propos' },
-    ],
-  },
-];
 
 export default function PlusScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [team, setTeam] = useState<Team | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      getTeam().then(setTeam);
+    }, [])
+  );
 
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
@@ -53,6 +32,46 @@ export default function PlusScreen() {
       { text: 'Se déconnecter', style: 'destructive' },
     ]);
   };
+
+  const menu = [
+    {
+      section: 'Mon compte',
+      items: [
+        {
+          icon: 'person.fill',
+          label: team?.coach || 'Coach',
+          value: team?.name || 'Volley Team',
+          route: '/profil-equipe',
+        },
+      ],
+    },
+    {
+      section: '',
+      items: [
+        {
+          icon: 'person.2.fill',
+          label: 'Équipe',
+          value: team?.name || 'Volley Team',
+          route: '/profil-equipe',
+        },
+        {
+          icon: 'bell.fill',
+          label: 'Notifications',
+          value: 'Activées',
+          route: '/notifications',
+        },
+        {
+          icon: 'qrcode',
+          label: "QR code de l'entraînement",
+          value: 'Mode coach',
+          route: '/(tabs)/entrainements',
+        },
+        { icon: 'paintbrush', label: 'Apparence', value: 'Système' },
+        { icon: 'questionmark.circle', label: 'Aide & support' },
+        { icon: 'info.circle', label: 'À propos' },
+      ],
+    },
+  ];
 
   return (
     <View style={styles.container}>
@@ -62,7 +81,7 @@ export default function PlusScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {MENU.map((section, si) => (
+        {menu.map((section, si) => (
           <View key={si} style={styles.section}>
             {section.section ? (
               <Text style={styles.sectionTitle}>{section.section}</Text>
@@ -92,7 +111,11 @@ export default function PlusScreen() {
         ))}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <IconSymbol name="rectangle.portrait.and.arrow.right" size={20} color={Colors.light.danger} />
+          <IconSymbol
+            name="rectangle.portrait.and.arrow.right"
+            size={20}
+            color={Colors.light.danger}
+          />
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
       </ScrollView>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,26 +6,53 @@ import {
   FlatList,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { TRAININGS, Training, formatDateFr } from '@/constants/data';
+import {
+  getTrainingsWithStats,
+  formatDateFr,
+  isToday,
+  type TrainingWithStats,
+} from '@/lib/api';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ProgressBar } from '@/components/volley/ProgressBar';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
+import { EmptyState } from '@/components/volley/EmptyState';
 
 export default function EntrainementsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [trainings, setTrainings] = useState<TrainingWithStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const renderItem = ({ item, index }: { item: Training; index: number }) => {
-    const rate = Math.round((item.presents / item.totalMembers) * 100);
-    const isToday = index === 0;
+  const load = async () => {
+    const data = await getTrainingsWithStats();
+    setTrainings(data);
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
+
+  const renderItem = ({ item }: { item: TrainingWithStats }) => {
+    const rate =
+      item.total_members > 0
+        ? Math.round((item.presents / item.total_members) * 100)
+        : 0;
+    const today = isToday(item.date);
 
     return (
       <TouchableOpacity
-        style={[styles.card, isToday && styles.cardToday]}
+        style={[styles.card, today && styles.cardToday]}
         onPress={() => router.push(`/entrainement/${item.id}`)}
         activeOpacity={0.75}
       >
@@ -34,53 +61,61 @@ export default function EntrainementsScreen() {
             <IconSymbol
               name="calendar"
               size={16}
-              color={isToday ? Colors.light.primary : Colors.light.textSecondary}
+              color={today ? Colors.light.primary : Colors.light.textSecondary}
             />
-            <Text style={[styles.dateText, isToday && styles.dateToday]}>
-              {isToday ? "Aujourd'hui" : formatDateFr(item.date)}
+            <Text style={[styles.dateText, today && styles.dateToday]}>
+              {today ? "Aujourd'hui" : formatDateFr(item.date)}
             </Text>
           </View>
           <Text style={styles.timeText}>
-            {item.startTime} – {item.endTime}
+            {item.start_time} – {item.end_time}
           </Text>
         </View>
 
         <View style={styles.locRow}>
           <IconSymbol name="mappin" size={14} color={Colors.light.textSecondary} />
-          <Text style={styles.locText}>{item.location}</Text>
+          <Text style={styles.locText}>{item.location || 'Lieu non défini'}</Text>
         </View>
 
-        {isToday ? (
+        {item.total_members > 0 ? (
           <>
             <View style={styles.presenceRow}>
               <Text style={styles.presenceCount}>
-                {item.presents} / {item.totalMembers} présents
+                {item.presents} / {item.total_members} présents
               </Text>
               <Text style={styles.presencePct}>{rate}%</Text>
             </View>
             <ProgressBar progress={rate} height={8} />
-            <PrimaryButton
-              title="QR Présence"
-              icon="qrcode"
-              onPress={() => router.push(`/qr-coach?id=${item.id}`)}
-              style={{ marginTop: 12 }}
-            />
+            {today && (
+              <PrimaryButton
+                title="QR Présence"
+                icon="qrcode"
+                onPress={() => router.push(`/qr-coach?id=${item.id}`)}
+                style={{ marginTop: 12 }}
+              />
+            )}
           </>
         ) : (
-          <Text style={styles.membersCount}>{item.totalMembers} membres</Text>
+          <Text style={styles.membersCount}>Aucun membre dans l'équipe</Text>
         )}
       </TouchableOpacity>
     );
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.navBtn}>
-            <IconSymbol name="chevron.left" size={22} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.navBtn} />
           <Text style={styles.headerTitle}>Entraînements</Text>
           <TouchableOpacity
             style={styles.addBtn}
@@ -89,15 +124,29 @@ export default function EntrainementsScreen() {
             <IconSymbol name="plus" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.monthLabel}>Octobre 2026</Text>
       </View>
 
       <FlatList
-        data={TRAININGS}
+        data={trainings}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 32, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+          />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            message={"Aucune donnée enregistrée\nCréez votre premier entraînement"}
+            icon="calendar"
+          />
+        }
       />
     </View>
   );
@@ -105,6 +154,7 @@ export default function EntrainementsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
+  center: { alignItems: 'center', justifyContent: 'center' },
   header: {
     backgroundColor: Colors.light.header,
     paddingHorizontal: 12,
@@ -115,7 +165,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  navBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  navBtn: { width: 40, height: 40 },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
   addBtn: {
     width: 40,
@@ -124,12 +174,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  monthLabel: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 4,
   },
   card: {
     backgroundColor: Colors.light.card,
@@ -141,10 +185,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardToday: {
-    borderWidth: 1.5,
-    borderColor: Colors.light.primary,
-  },
+  cardToday: { borderWidth: 1.5, borderColor: Colors.light.primary },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

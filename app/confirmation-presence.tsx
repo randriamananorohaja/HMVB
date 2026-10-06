@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
 import { Avatar } from '@/components/volley/Avatar';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
@@ -8,22 +8,52 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function ConfirmationPresenceScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    memberId?: string;
+    name?: string;
+    number?: string;
+    position?: string;
+    time?: string;
+    status?: string;
+  }>();
+
+  const name = params.name || 'Joueur';
+  const parts = name.split(' ');
+  const first = parts[0] || 'J';
+  const last = parts.slice(1).join(' ') || '';
+  const isLate = params.status === 'retard';
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <View style={styles.checkCircle}>
+        <View style={[styles.checkCircle, isLate && { backgroundColor: Colors.light.warning }]}>
           <IconSymbol name="checkmark" size={40} color="#fff" />
         </View>
         <Text style={styles.title}>Présence enregistrée</Text>
-        <Text style={styles.subtitle}>Votre présence a bien été enregistrée !</Text>
+        <Text style={styles.subtitle}>
+          {isLate ? 'Arrivée en retard enregistrée' : 'Votre présence a bien été enregistrée !'}
+        </Text>
 
-        <Avatar firstName="Andry" lastName="Rakoto" size={72} />
-        <Text style={styles.name}>ANDRY RAKOTO</Text>
-        <Text style={styles.pos}>#7 · Réceptionneur-attaquant</Text>
-        <View style={styles.badge}>
-          <IconSymbol name="checkmark.circle.fill" size={16} color={Colors.light.success} />
-          <Text style={styles.badgeText}>Présent · 18:07</Text>
+        <Avatar firstName={first} lastName={last} size={72} />
+        <Text style={styles.name}>{name.toUpperCase()}</Text>
+        <Text style={styles.pos}>
+          #{params.number || '—'} · {params.position || ''}
+        </Text>
+        <View style={[styles.badge, isLate && { backgroundColor: '#FEF3C7' }]}>
+          <IconSymbol
+            name="checkmark.circle.fill"
+            size={16}
+            color={isLate ? Colors.light.warning : Colors.light.success}
+          />
+          <Text
+            style={[
+              styles.badgeText,
+              isLate && { color: Colors.light.warning },
+            ]}
+          >
+            {isLate ? 'En retard' : 'Présent'}
+            {params.time ? ` · ${params.time}` : ''}
+          </Text>
         </View>
 
         <PrimaryButton

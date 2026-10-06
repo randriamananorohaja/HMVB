@@ -7,10 +7,14 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, Radius } from '@/constants/theme';
-import { POSITIONS } from '@/constants/data';
+import { POSITIONS } from '@/lib/types';
+import { createMember } from '@/lib/api';
 import { Header } from '@/components/volley/Header';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -22,26 +26,105 @@ export default function AjouterMembreScreen() {
   const [number, setNumber] = useState('');
   const [position, setPosition] = useState(POSITIONS[0]);
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [birthPlace, setBirthPlace] = useState('');
+  const [address, setAddress] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [showPositions, setShowPositions] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    if (!lastName || !firstName) {
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission requise',
+        "Autorisez l'accès à la galerie pour choisir une photo d'avatar."
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAvatar(result.assets[0].uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', "Autorisez l'accès à la caméra pour prendre une photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAvatar(result.assets[0].uri);
+    }
+  };
+
+  const chooseAvatar = () => {
+    Alert.alert('Photo de profil', 'Choisir une source', [
+      { text: 'Galerie', onPress: pickImage },
+      { text: 'Appareil photo', onPress: takePhoto },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  };
+
+  const handleSave = async () => {
+    if (!lastName.trim() || !firstName.trim()) {
       Alert.alert('Erreur', 'Nom et prénom sont obligatoires');
       return;
     }
-    Alert.alert('Succès', 'Membre ajouté avec succès', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    setSaving(true);
+    try {
+      const created = await createMember({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        number: number ? parseInt(number, 10) : 0,
+        position,
+        phone: phone.trim(),
+        email: email.trim() || null,
+        birth_date: birthDate.trim() || null,
+        birth_place: birthPlace.trim() || null,
+        address: address.trim() || null,
+        avatar,
+        status: 'actif',
+      });
+      if (!created) {
+        Alert.alert('Erreur', "Impossible d'enregistrer le membre");
+        return;
+      }
+      Alert.alert('Succès', 'Membre ajouté avec succès', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (e) {
+      Alert.alert('Erreur', String(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <View style={styles.container}>
       <Header title="Ajouter un membre" showBack />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        {/* Photo */}
-        <TouchableOpacity style={styles.photoBox}>
-          <IconSymbol name="camera.fill" size={32} color={Colors.light.textMuted} />
-          <Text style={styles.photoText}>Ajouter une photo</Text>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <TouchableOpacity style={styles.photoBox} onPress={chooseAvatar} activeOpacity={0.8}>
+          {avatar ? (
+            <Image source={{ uri: avatar }} style={styles.photoImg} />
+          ) : (
+            <>
+              <IconSymbol name="camera.fill" size={32} color={Colors.light.textMuted} />
+              <Text style={styles.photoText}>Ajouter une photo</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <Field label="Nom *" value={lastName} onChange={setLastName} placeholder="Rakoto" />
@@ -55,10 +138,7 @@ export default function AjouterMembreScreen() {
         />
 
         <Text style={styles.label}>Position</Text>
-        <TouchableOpacity
-          style={styles.select}
-          onPress={() => setShowPositions(!showPositions)}
-        >
+        <TouchableOpacity style={styles.select} onPress={() => setShowPositions(!showPositions)}>
           <Text style={styles.selectText}>{position}</Text>
           <IconSymbol name="chevron.right" size={18} color={Colors.light.textMuted} />
         </TouchableOpacity>
@@ -93,8 +173,39 @@ export default function AjouterMembreScreen() {
           placeholder="+261 34 12 34 567"
           keyboard="phone-pad"
         />
+        <Field
+          label="Email"
+          value={email}
+          onChange={setEmail}
+          placeholder="joueur@email.com"
+          keyboard="email-address"
+        />
+        <Field
+          label="Date de naissance"
+          value={birthDate}
+          onChange={setBirthDate}
+          placeholder="JJ/MM/AAAA ou AAAA-MM-JJ"
+        />
+        <Field
+          label="Lieu de naissance"
+          value={birthPlace}
+          onChange={setBirthPlace}
+          placeholder="Antananarivo"
+        />
+        <Field
+          label="Adresse"
+          value={address}
+          onChange={setAddress}
+          placeholder="Lot II M 15 Bis, Ankorondrano"
+        />
 
-        <PrimaryButton title="Ajouter le membre" onPress={handleSave} style={{ marginTop: 24 }} />
+        <PrimaryButton
+          title={saving ? 'Enregistrement…' : 'Ajouter le membre'}
+          onPress={handleSave}
+          disabled={saving}
+          style={{ marginTop: 24 }}
+        />
+        {saving && <ActivityIndicator style={{ marginTop: 12 }} color={Colors.light.primary} />}
       </ScrollView>
     </View>
   );
@@ -123,6 +234,7 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor={Colors.light.textMuted}
         keyboardType={keyboard}
+        autoCapitalize={keyboard === 'email-address' ? 'none' : 'sentences'}
       />
     </View>
   );
@@ -142,7 +254,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
     marginBottom: 24,
+    overflow: 'hidden',
   },
+  photoImg: { width: 100, height: 100, borderRadius: 50 },
   photoText: { fontSize: 11, color: Colors.light.textMuted, marginTop: 4 },
   label: {
     fontSize: 13,

@@ -1,25 +1,61 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { MEMBERS } from '@/constants/data';
+import { getMember, getMemberPresenceStats } from '@/lib/api';
+import type { Member } from '@/lib/types';
 import { Header } from '@/components/volley/Header';
 import { Avatar } from '@/components/volley/Avatar';
-import { ProgressBar } from '@/components/volley/ProgressBar';
+import { EmptyState } from '@/components/volley/EmptyState';
 
 export default function StatsJoueurScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const member = MEMBERS.find((m) => m.id === id) ?? MEMBERS[0];
+  const [member, setMember] = useState<Member | null>(null);
+  const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0, rate: 0, total: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const m = await getMember(id);
+        setMember(m);
+        if (m) setStats(await getMemberPresenceStats(m.id));
+        setLoading(false);
+      })();
+    }, [id])
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
+
+  if (!member) {
+    return (
+      <View style={styles.container}>
+        <Header title="Statistiques joueur" showBack />
+        <EmptyState message="Aucune donnée enregistrée" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Header title="Statistiques joueur" showBack />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={styles.profile}>
-          <Avatar firstName={member.firstName} lastName={member.lastName} size={64} />
+          <Avatar
+            firstName={member.first_name}
+            lastName={member.last_name}
+            size={64}
+            uri={member.avatar}
+          />
           <View style={{ marginLeft: 14 }}>
             <Text style={styles.name}>
-              {member.firstName} {member.lastName}
+              {member.first_name} {member.last_name}
             </Text>
             <Text style={styles.pos}>
               #{member.number} · {member.position}
@@ -27,44 +63,21 @@ export default function StatsJoueurScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.season}>Saison 2026 – 2027</Text>
-          <View style={styles.circleWrap}>
-            <View style={styles.circle}>
-              <Text style={styles.circlePct}>{member.presenceRate}%</Text>
-              <Text style={styles.circleLabel}>Taux de{'\n'}présence</Text>
-            </View>
-          </View>
-          <View style={styles.legend}>
-            <Legend color={Colors.light.success} label="Présences" value={member.presents} />
-            <Legend color={Colors.light.danger} label="Absences" value={member.absents} />
-            <Legend color={Colors.light.warning} label="Retard" value={member.retards} />
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Évolution</Text>
-          <View style={styles.bars}>
-            {[
-              { m: 'Août', v: 80 },
-              { m: 'Sep', v: 90 },
-              { m: 'Oct', v: member.presenceRate },
-            ].map((b) => (
-              <View key={b.m} style={styles.barCol}>
-                <Text style={styles.barVal}>{b.v}%</Text>
-                <View style={styles.barTrack}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      { height: `${b.v}%`, backgroundColor: Colors.light.primary },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.barMonth}>{b.m}</Text>
+        {stats.total === 0 ? (
+          <EmptyState message="Aucune donnée de présence enregistrée" icon="chart.bar.fill" />
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.circleWrap}>
+              <View style={styles.circle}>
+                <Text style={styles.circlePct}>{stats.rate}%</Text>
+                <Text style={styles.circleLabel}>Taux de{'\n'}présence</Text>
               </View>
-            ))}
+            </View>
+            <Legend color={Colors.light.success} label="Présences" value={stats.presents} />
+            <Legend color={Colors.light.danger} label="Absences" value={stats.absents} />
+            <Legend color={Colors.light.warning} label="Retard" value={stats.retards} />
           </View>
-        </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -96,13 +109,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card,
     borderRadius: Radius.lg,
     padding: 16,
-    marginBottom: 14,
-  },
-  season: {
-    fontSize: 13,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   circleWrap: { alignItems: 'center', marginBottom: 20 },
   circle: {
@@ -121,19 +127,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14,
   },
-  legend: { paddingHorizontal: 20 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.light.text, marginBottom: 16 },
-  bars: { flexDirection: 'row', justifyContent: 'space-around', height: 140 },
-  barCol: { alignItems: 'center', flex: 1 },
-  barVal: { fontSize: 12, fontWeight: '600', color: Colors.light.text, marginBottom: 4 },
-  barTrack: {
-    width: 36,
-    flex: 1,
-    backgroundColor: Colors.light.progressBg,
-    borderRadius: 8,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: { width: '100%', borderRadius: 8 },
-  barMonth: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 6 },
 });

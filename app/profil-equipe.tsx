@@ -1,15 +1,69 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+  Alert,
+} from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius } from '@/constants/theme';
-import { TEAM, MEMBERS } from '@/constants/data';
+import { getTeam, getMembers, updateTeam } from '@/lib/api';
+import type { Team, Member } from '@/lib/types';
 import { Header } from '@/components/volley/Header';
 import { Avatar } from '@/components/volley/Avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PrimaryButton } from '@/components/volley/PrimaryButton';
+import { EmptyState } from '@/components/volley/EmptyState';
 
 export default function ProfilEquipeScreen() {
   const router = useRouter();
+  const [team, setTeam] = useState<Team | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [coach, setCoach] = useState('');
+  const [season, setSeason] = useState('');
+
+  const load = async () => {
+    const [t, m] = await Promise.all([getTeam(), getMembers()]);
+    setTeam(t);
+    setMembers(m);
+    if (t) {
+      setName(t.name);
+      setCategory(t.category);
+      setCoach(t.coach);
+      setSeason(t.season);
+    }
+    setLoading(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
+
+  const save = async () => {
+    if (!team) return;
+    await updateTeam(team.id, { name, category, coach, season });
+    setEditing(false);
+    load();
+    Alert.alert('Succès', 'Équipe mise à jour');
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -19,48 +73,70 @@ export default function ProfilEquipeScreen() {
           <View style={styles.logo}>
             <Text style={{ fontSize: 40 }}>🏐</Text>
           </View>
-          <Text style={styles.teamName}>{TEAM.name}</Text>
+          <Text style={styles.teamName}>{team?.name ?? 'Volley Team'}</Text>
           <PrimaryButton
-            title="Modifier l'équipe"
+            title={editing ? 'Enregistrer' : "Modifier l'équipe"}
             icon="pencil"
-            variant="outline"
-            onPress={() => {}}
+            variant={editing ? 'primary' : 'outline'}
+            onPress={() => (editing ? save() : setEditing(true))}
             style={{ marginTop: 12, paddingVertical: 10 }}
           />
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Informations</Text>
-          <Info label="Nom de l'équipe" value={TEAM.name} />
-          <Info label="Catégorie" value={TEAM.category} />
-          <Info label="Coach" value={TEAM.coach} />
-          <Info label="Saison" value={TEAM.season} />
+          {editing ? (
+            <>
+              <Field label="Nom de l'équipe" value={name} onChange={setName} />
+              <Field label="Catégorie" value={category} onChange={setCategory} />
+              <Field label="Coach" value={coach} onChange={setCoach} />
+              <Field label="Saison" value={season} onChange={setSeason} />
+            </>
+          ) : (
+            <>
+              <Info label="Nom de l'équipe" value={team?.name || '—'} />
+              <Info label="Catégorie" value={team?.category || '—'} />
+              <Info label="Coach" value={team?.coach || '—'} />
+              <Info label="Saison" value={team?.season || '—'} />
+            </>
+          )}
         </View>
 
         <View style={styles.card}>
           <View style={styles.membersHeader}>
             <Text style={styles.cardTitle}>Membres</Text>
-            <Text style={styles.count}>{MEMBERS.length}</Text>
+            <Text style={styles.count}>{members.length}</Text>
           </View>
-          <View style={styles.avatars}>
-            {MEMBERS.slice(0, 6).map((m) => (
-              <View key={m.id} style={{ marginRight: -8 }}>
-                <Avatar firstName={m.firstName} lastName={m.lastName} size={40} />
+          {members.length === 0 ? (
+            <EmptyState message="Aucune donnée enregistrée" icon="person.2.fill" />
+          ) : (
+            <>
+              <View style={styles.avatars}>
+                {members.slice(0, 6).map((m) => (
+                  <View key={m.id} style={{ marginRight: -8 }}>
+                    <Avatar
+                      firstName={m.first_name}
+                      lastName={m.last_name}
+                      size={40}
+                      uri={m.avatar}
+                    />
+                  </View>
+                ))}
+                {members.length > 6 && (
+                  <View style={styles.more}>
+                    <Text style={styles.moreText}>+{members.length - 6}</Text>
+                  </View>
+                )}
               </View>
-            ))}
-            {MEMBERS.length > 6 && (
-              <View style={styles.more}>
-                <Text style={styles.moreText}>+{MEMBERS.length - 6}</Text>
-              </View>
-            )}
-          </View>
-          <TouchableOpacity
-            style={styles.seeAll}
-            onPress={() => router.push('/(tabs)/equipe')}
-          >
-            <Text style={styles.seeAllText}>Voir tous les membres</Text>
-            <IconSymbol name="chevron.right" size={16} color={Colors.light.primary} />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.seeAll}
+                onPress={() => router.push('/(tabs)/equipe')}
+              >
+                <Text style={styles.seeAllText}>Voir tous les membres</Text>
+                <IconSymbol name="chevron.right" size={16} color={Colors.light.primary} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -72,6 +148,36 @@ function Info({ label, value }: { label: string; value: string }) {
     <View style={infoStyles.row}>
       <Text style={infoStyles.label}>{label}</Text>
       <Text style={infoStyles.value}>{value}</Text>
+    </View>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={{ fontSize: 12, color: Colors.light.textSecondary, marginBottom: 4 }}>
+        {label}
+      </Text>
+      <TextInput
+        style={{
+          borderWidth: 1,
+          borderColor: Colors.light.border,
+          borderRadius: 8,
+          padding: 10,
+          fontSize: 15,
+          color: Colors.light.text,
+        }}
+        value={value}
+        onChangeText={onChange}
+      />
     </View>
   );
 }

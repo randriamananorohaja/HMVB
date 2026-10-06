@@ -1,14 +1,18 @@
 {
   "expo": {
-    "name": "MonApp",
-    "slug": "MonApp",
+    "name": "VolleyTeam",
+    "slug": "volleyteam",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "monapp",
+    "scheme": "volleyteam",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "VolleyTeam a besoin de la cam\u00e9ra pour scanner les QR codes et prendre des photos d'avatar.",
+        "NSPhotoLibraryUsageDescription": "VolleyTeam a besoin d'acc\u00e9der \u00e0 vos photos pour l'avatar des joueurs."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,13 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "output": "static",
@@ -40,7 +50,21 @@
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "VolleyTeam a besoin de la cam\u00e9ra pour scanner les QR codes de pr\u00e9sence."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "VolleyTeam a besoin d'acc\u00e9der \u00e0 vos photos pour l'avatar des joueurs.",
+          "cameraPermission": "VolleyTeam a besoin de la cam\u00e9ra pour prendre une photo d'avatar."
+        }
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
