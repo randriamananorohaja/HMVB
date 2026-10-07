@@ -432,43 +432,19 @@ export function historyToCsv(rows: HistoryRow[]): string {
  *
  * I'll implement cleanup that soft-archives via status column on trainings.
  */
+/**
+ * Anciennement : archivait les séances passées.
+ * DÉSACTIVÉ : l'historique des présences et les séances restent
+ * toujours en base jusqu'à suppression manuelle par le coach.
+ */
 export async function cleanupExpiredTrainings(): Promise<number> {
-  const db = await getDb();
-  // Ensure column exists
-  try {
-    await db.execAsync(`ALTER TABLE trainings ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
-  } catch {
-    // column may already exist
-  }
-
-  const all = await db.getAllAsync<{ id: string; date: string; end_time: string; archived: number }>(
-    'SELECT id, date, end_time, COALESCE(archived, 0) as archived FROM trainings WHERE COALESCE(archived, 0) = 0'
-  );
-  const now = new Date();
-  let count = 0;
-  for (const t of all ?? []) {
-    const end = new Date(`${t.date}T${t.end_time}:00`);
-    if (!isNaN(end.getTime()) && end.getTime() <= now.getTime()) {
-      await db.runAsync('UPDATE trainings SET archived = 1, updated_at = ? WHERE id = ?', [
-        nowIso(),
-        t.id,
-      ]);
-      count++;
-    }
-  }
-  return count;
+  // Ne supprime / n'archive plus rien automatiquement
+  return 0;
 }
 
-/** Liste des entraînements actifs (non archivés) */
+/** Tous les entraînements (y compris terminés) avec stats — rien n'est auto-supprimé */
 export async function getActiveTrainingsWithStats() {
-  await cleanupExpiredTrainings();
-  const all = await getTrainingsWithStats();
-  const db = await getDb();
-  const archived = await db.getAllAsync<{ id: string }>(
-    'SELECT id FROM trainings WHERE COALESCE(archived, 0) = 1'
-  );
-  const archSet = new Set((archived ?? []).map((a) => a.id));
-  return all.filter((t) => !archSet.has(t.id));
+  return getTrainingsWithStats();
 }
 
 

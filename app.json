@@ -18,8 +18,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#0A2540",
-        "backgroundImage": "./assets/images/android-icon-background.png"
+        "backgroundColor": "#0A2540"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -42,10 +41,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#0A2540"
         }
       ],
       "expo-font",
@@ -70,11 +66,6 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    },
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A2540"
     }
   }
 }
